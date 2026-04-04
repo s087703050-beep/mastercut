@@ -1,0 +1,18 @@
+{
+  "name": "德昌鋁裁料計算機",
+  "short_name": "德昌鋁裁",
+  "description": "幫助您快速計算裁切鋁料的總用量與所需支數，最佳化餘料再利用。",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "cat.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>德昌鋁裁料計算機</title>
+    <meta name="description" content="幫助您快速計算裁切鋁料的總用量與所需支數，最佳化餘料再利用。">
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="德昌鋁裁">
+    <link rel="apple-touch-icon" href="cat.jpg">
+    
+    <!-- Google Fonts for Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .settings-row {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+            align-items: center;
+            justify-content: center;
+        }
+        .settings-row label {
+            white-space: nowrap;
+            color: var(--text-secondary);
+        }
+        .settings-row input {
+            width: 100px;
+        }
+        .realtime-summary {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid var(--accent-blue);
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: var(--br-md);
+        }
+        .realtime-summary h3 {
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+            color: var(--text-primary);
+        }
+        .realtime-summary p {
+            margin-bottom: 0.25rem;
+            color: var(--text-secondary);
+        }
+        .realtime-summary strong {
+            color: white;
+            font-size: 1.1rem;
+        }
+
+        /* 響應式裁切列表網格 (桌面版 4 欄) */
+        .req-grid {
+            display: grid;
+            grid-template-columns: 36px 3.8fr 2.8fr 45px;
+            gap: 0.4rem;
+            align-items: center;
+        }
+
+        /* 刪除動畫 */
+        @keyframes fadeOutUp {
+            from { opacity: 1; transform: scale(1) translateY(0); }
+            to { opacity: 0; transform: scale(0.95) translateY(-10px); }
+        }
+        .fade-out-up {
+            animation: fadeOutUp 0.3s ease-out forwards !important;
+        }
+
+
+
+        /* 下方固定導航 (手機版) */
+        .mobile-bottom-nav {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: var(--bg-secondary);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid var(--border-color);
+            z-index: 1000;
+            box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.3);
+        }
+        .mobile-nav-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            color: var(--text-secondary);
+            border: none;
+            font-size: 0.8rem;
+            gap: 2px;
+        }
+        .mobile-nav-btn.active {
+            color: var(--accent-blue);
+        }
+        .mobile-nav-btn .icon {
+            font-size: 1.25rem;
+        }
+
+        /* 呼吸發光效果 */
+        @keyframes subtleGlow {
+            0% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.2); }
+            50% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+            100% { box-shadow: 0 0 5px rgba(59, 130, 246, 0.2); }
+        }
+        .glow-effect {
+            animation: subtleGlow 2s infinite ease-in-out;
+            border-color: rgba(59, 130, 246, 0.5) !important;
+        }
+
+        @media (max-width: 800px) {
+            .mobile-bottom-nav {
+                display: flex;
+            }
+            .app-container {
+                padding-bottom: 80px; /* 留出底部導航空間 */
+            }
+            /* 預設隱藏右側面板 */
+            .result-panel.mobile-hidden {
+                display: none !important;
+            }
+            .input-panel.mobile-hidden {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-background"></div>
+    <div class="app-background-noise"></div>
+    <div class="top-controls">
+        <button id="calcToggleBtn" class="control-btn calc-cat-btn" title="打開/關閉財神貓計算機">
+            <img src="cat.jpg" alt="🐱" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+        </button>
+        <button id="layoutToggleBtn" class="control-btn" title="切換佈局 (單欄/雙欄)">📱</button>
+        <button id="themeToggleBtn" class="control-btn" title="切換亮/暗主題">🌞</button>
+    </div>
+    <main class="app-container">
+        
+        <header class="app-header">
+            <h1>德昌鋁裁料計算機</h1>
+            <p>輸入裁切尺寸，自動加總總長度，並為您估計單規裁切所需要的鋁材總支數。</p>
+            <div id="weatherInfo" style="margin-top: 0.5rem; font-size: 1.1rem; color: var(--text-primary); font-weight: 600; display: inline-block; padding: 0.4rem 1.2rem; background: rgba(255,255,255,0.05); border-radius: 50px; border: 1px solid var(--border-color); backdrop-filter: blur(8px); box-shadow: 0 4px 15px rgba(0,0,0,0.1);"></div>
+            <div id="liveClock" style="margin-top: 0.5rem; font-size: 1.1rem; color: var(--accent-blue); font-weight: 600; letter-spacing: 1px; text-shadow: 0 0 10px rgba(59, 130, 246, 0.3);"></div>
+        </header>
+
+        <div class="content-wrapper">
+            <!-- Left Side: Inputs -->
+            <section class="panel input-panel">
+                
+
+
+                <details class="advanced-settings" style="margin-bottom: 1.5rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--br-md); padding: 0.5rem 1rem;">
+                    <summary style="cursor: pointer; font-weight: 600; color: var(--text-primary); padding: 0.5rem 0; outline: none; text-align: center; list-style: none;">
+                        ⚙️ 案名 / 型號 / 鋸片
+                    </summary>
+                    <div style="padding-top: 1rem; border-top: 1px solid var(--border-color); margin-top: 0.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                        <div style="text-align: center;">
+                            <input type="text" id="projectNameInput" placeholder="📝 案名（選填）" style="width:100%; padding:0.55rem 0.75rem; background: rgba(0,0,0,0.2); color:var(--text-primary); border:1px solid rgba(255,255,255,0.15); border-radius:var(--br-sm); font-size:0.95rem; text-align: center;">
+                        </div>
+                        
+                        <div>
+                            <div class="settings-row" style="margin-bottom: 0;">
+                                 <label for="kerfInput">鋸片厚度 (mm)：</label>
+                                 <input type="number" id="kerfInput" value="5" min="0" step="1" style="background: rgba(0,0,0,0.2);">
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; text-align: center;">
+                                「裁切需求尺寸 + 鋸片厚度」 = 每段預留總尺寸
+                            </div>
+                        </div>
+
+                        <div>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; margin-bottom:0.5rem;">
+                                <input type="text" id="materialModelInputW" placeholder="📦 橫料型號"
+                                    style="width:100%; padding:0.55rem 0.75rem; background: rgba(0,0,0,0.2); color:var(--text-primary); border:1px solid rgba(255,255,255,0.15); border-radius:var(--br-sm); font-size:0.95rem; text-align: center;">
+                                <input type="text" id="materialModelInputL" placeholder="📦 直料型號"
+                                    style="width:100%; padding:0.55rem 0.75rem; background: rgba(0,0,0,0.2); color:var(--text-primary); border:1px solid rgba(255,255,255,0.15); border-radius:var(--br-sm); font-size:0.95rem; text-align: center;">
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); text-align: center;">
+                                💡 887(8公分)：橫料 − 41mm 包外餘量<br>
+                                💡 1087(10公分)：橫料 − 51mm 包外餘量
+                            </div>
+                        </div>
+                    </div>
+                </details>
+                
+                <div class="section-block">
+                    <div class="section-header" style="margin-bottom: 0.5rem; border-bottom: none; padding-bottom: 0;">
+                        <h2>✂️ 裁切尺寸需求</h2>
+                    </div>
+                    <!-- 全域扣除按鈕組 -->
+                    <div style="display:flex; flex-direction:column; gap:0.35rem; margin-bottom:0.75rem; align-items: center;">
+                        <div style="display:flex; align-items:center; gap:0.5rem; justify-content: center;">
+                            <span style="font-size:0.9rem; color:var(--text-secondary); white-space:nowrap;">扣除包外餘量(mm)：</span>
+                            <div style="display:flex; gap:0.35rem;">
+                                <button type="button" class="deduct-btn active" data-value="0"
+                                    style="padding:0.35rem 0.9rem; border-radius:var(--br-sm); border:1px solid rgba(255,255,255,0.2); background:var(--accent-blue); color:white; font-size:0.9rem; cursor:pointer; font-weight:600; transition:all 0.15s;">0</button>
+                                <button type="button" class="deduct-btn" data-value="41"
+                                    style="padding:0.35rem 0.9rem; border-radius:var(--br-sm); border:1px solid rgba(255,255,255,0.2); background:var(--bg-tertiary); color:var(--text-secondary); font-size:0.9rem; cursor:pointer; font-weight:600; transition:all 0.15s;">41</button>
+                                <button type="button" class="deduct-btn" data-value="51"
+                                    style="padding:0.35rem 0.9rem; border-radius:var(--br-sm); border:1px solid rgba(255,255,255,0.2); background:var(--bg-tertiary); color:var(--text-secondary); font-size:0.9rem; cursor:pointer; font-weight:600; transition:all 0.15s;">51</button>
+                            </div>
+                        </div>
+                        <!-- 新增按鈕與狀態標籤 (對齊下方輸入列) -->
+                        <div style="display:flex; align-items:center; gap: 0.5rem; margin-top: 0.5rem; margin-bottom: 0.25rem;">
+                            <!-- 佔位 (對齊編號寬度) -->
+                            <div style="width: 1.2rem; flex-shrink: 0;"></div>
+                            <!-- 寬度套用標示 (置中對齊) -->
+                            <div style="flex-grow: 1; text-align: center;">
+                                <span id="deductLabel" style="font-size:0.82rem; color:var(--text-secondary);"></span>
+                            </div>
+                            <!-- 新增與刪除最後一行按鈕 -->
+                            <div style="display:flex; gap:0.35rem;">
+                                <button type="button" id="addReqBtn" style="width: 38px; height: 38px; background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); display: flex; align-items: center; justify-content: center; font-size: 1.6rem; border-radius: var(--br-md); border: 1px solid rgba(59, 130, 246, 0.3); font-weight: bold; cursor: pointer; transition: all 0.2s;" title="新增裁切需求">+</button>
+                                <button type="button" id="removeReqBtn" style="width: 38px; height: 38px; background: rgba(239, 68, 68, 0.15); color: var(--accent-red); display: flex; align-items: center; justify-content: center; font-size: 1.6rem; border-radius: var(--br-md); border: 1px solid rgba(239, 68, 68, 0.3); font-weight: bold; cursor: pointer; transition: all 0.2s;" title="移除最後一行">−</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="list-header req-grid" style="padding: 0.5rem 0; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-primary); font-size: 0.85rem; font-weight: 500; text-align: center;">
+                        <div style="text-align: center; white-space: nowrap; letter-spacing: -0.8px;">序號</div>
+                        <div style="white-space: nowrap; letter-spacing: -0.5px;">設計尺寸(寬×高)</div>
+                        <div style="white-space: nowrap; letter-spacing: -0.5px;">裁切尺寸(寬×高)</div>
+                        <div style="white-space: nowrap; letter-spacing: -0.8px;">數量</div>
+                    </div>
+                    <div id="requirementsContainer" class="list-container">
+                        <!-- Requirement rows go here -->
+                    </div>
+                </div>
+
+                <!-- 實時自動加總結果 (移至 section-block 外，接近按鈕處) -->
+                <div class="realtime-summary" id="realtimeSummary" style="margin-bottom: 1.5rem; position: relative; padding: 1.25rem;">
+                    <h3 style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; text-align: center; font-size: 1.1rem;">⚡ 即時加總看板</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                        <!-- 寬度加總 (淨長) -->
+                        <div id="boxSumW" style="background: rgba(0,0,0,0.2); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid rgba(16,185,129,0.3);">
+                            <div style="font-size: 0.8rem; color: #10b981; margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8L22 12L18 16M6 8L2 12L6 16M2 12H22"/></svg>
+                                <span>總橫料長</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <strong id="liveSumW" style="font-size: 1.3rem; color: #10b981; line-height: 1.1;">0</strong> 
+                                <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">mm</span>
+                            </div>
+                        </div>
+                        <!-- 長度加總 (淨長) -->
+                        <div style="background: rgba(0,0,0,0.2); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid var(--border-color);">
+                            <div style="font-size: 0.8rem; color: var(--text-primary); margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L12 2L16 6M8 18L12 22L16 18M12 2V22"/></svg>
+                                <span>總直料長</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <strong id="liveSumL" style="font-size: 1.3rem; color: var(--text-primary); line-height: 1.1;">0</strong> 
+                                <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">mm</span>
+                            </div>
+                        </div>
+                        <!-- 橫料鋁料總長 (含鋸片) -->
+                        <div style="background: rgba(0,0,0,0.2); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid rgba(16,185,129,0.3);">
+                            <div style="font-size: 0.8rem; color: #10b981; margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8L22 12L18 16M6 8L2 12L6 16M2 12H22"/></svg>
+                                <span>橫料鋁需(含鋸)</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <strong id="liveTotalLengthW" style="font-size: 1.3rem; color: #10b981; line-height: 1.1;">0</strong> 
+                                <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">mm</span>
+                            </div>
+                        </div>
+                        <!-- 直料鋁料總長 (含鋸片) -->
+                        <div style="background: rgba(0,0,0,0.2); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid var(--border-color);">
+                            <div style="font-size: 0.8rem; color: var(--text-primary); margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L12 2L16 6M8 18L12 22L16 18M12 2V22"/></svg>
+                                <span>直料鋁需(含鋸)</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <strong id="liveTotalLengthL" style="font-size: 1.3rem; color: var(--text-primary); line-height: 1.1;">0</strong> 
+                                <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px;">mm</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button class="btn-primary" id="calculateBtn">✨ 產生完整採購報表</button>
+                    <button class="btn-secondary" id="resetBtn">清空重設</button>
+                </div>
+
+
+            </section>
+
+            <!-- Right Side: Results -->
+            <section class="panel result-panel">
+                <div class="result-header" style="display: flex; flex-direction: column; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+                    <h2 style="margin: 0; text-align: center;">📊 採購需求與裁切建議</h2>
+                    <div id="viewModeToggle" class="hidden" style="display: flex; gap: 0.5rem; justify-content: center;">
+                        <button id="modeVisualBtn" class="btn-secondary active" style="padding: 0.3rem 0.75rem; font-size: 0.9rem; background: var(--accent-blue); color: white; border-color: var(--accent-blue); white-space: nowrap;">👁️ 圖解</button>
+                        <button id="modeTextBtn" class="btn-secondary" style="padding: 0.3rem 0.75rem; font-size: 0.9rem; white-space: nowrap;">📄 文字</button>
+                    </div>
+                </div>
+                
+                <div id="emptyState" class="empty-state">
+                    <div class="icon">📐</div>
+                    <p>請在左方輸入裁切需求，系統將即時加總長度。產生報表後可依據不同鋁材長短組合切換方案。</p>
+                </div>
+                
+                <div id="summaryStats" class="summary-stats hidden">
+                    <div class="stat-card">
+                        <div class="stat-label" style="display: flex; align-items: center; justify-content: center; gap: 4px; color: #10b981;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8L22 12L18 16M6 8L2 12L6 16M2 12H22"/></svg>
+                            <span>橫料所需總長</span>
+                        </div>
+                        <div class="stat-value" id="valTotalW" style="font-size:1.2rem; color: #10b981;">0 mm</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label" style="display: flex; align-items: center; justify-content: center; gap: 4px; color: var(--text-primary);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L12 2L16 6M8 18L12 22L16 18M12 2V22"/></svg>
+                            <span>直料所需總長</span>
+                        </div>
+                        <div class="stat-value" id="valTotalL" style="font-size:1.2rem; color: var(--text-primary);">0 mm</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">6000 方案採買支數</div>
+                        <div class="stat-value" id="tabCnt6000" style="font-size:0.95rem; color:var(--text-secondary)">橫 0 / 直 0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">6400 方案採買支數</div>
+                        <div class="stat-value" id="tabCnt6400" style="font-size:0.95rem; color:var(--text-secondary)">橫 0 / 直 0</div>
+                    </div>
+                </div>
+
+                <div id="planTabs" class="plan-tabs hidden" style="flex-wrap: wrap;">
+                    <button class="plan-tab active" data-target="plan6000">方案 A: 純 6000 (<span id="tabCntBtn6000">0</span>)</button>
+                    <button class="plan-tab" data-target="plan6400">方案 B: 純 6400 (<span id="tabCntBtn6400">0</span>)</button>
+                    <button class="plan-tab" data-target="planMixed" style="color: var(--accent-orange);">🏆 方案 C: 混合雙料 (<span id="tabCntBtnMixed">0</span>)</button>
+                </div>
+                
+                <!-- 方案 A 詳細 -->
+                <div id="plan6000" class="plan-view hidden">
+                   <div style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+                       💡 <strong>說明：</strong> 本方案全部使用 6000mm 鋁料。優先滿足主大尺寸，下刀後剩下的廢料直接安插切給較小尺寸，減少切刀次數。
+                   </div>
+                   <h3 style="color: #10b981; border-bottom: 1px solid rgba(16,185,129,0.3); padding-bottom: 0.5rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8L22 12L18 16M6 8L2 12L6 16M2 12H22"/></svg>
+                        <span>總橫料長 <span class="label-model-w"></span></span>
+                        <span id="count6000-w" style="font-size: 0.9rem; margin-left: auto;">0 支</span>
+                   </h3>
+                   <div id="patterns6000-w"></div>
+                   
+                   <h3 style="color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem; margin-top: 2rem; display: flex; align-items: center; gap: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L12 2L16 6M8 18L12 22L16 18M12 2V22"/></svg>
+                        <span>總直料長 <span class="label-model-l"></span></span>
+                        <span id="count6000-l" style="font-size: 0.9rem; margin-left: auto;">0 支</span>
+                   </h3>
+                   <div id="patterns6000-l"></div>
+                </div>
+                
+                <!-- 方案 B 詳細 -->
+                <div id="plan6400" class="plan-view hidden">
+                   <div style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+                       💡 <strong>說明：</strong> 本方案全部使用 6400mm 鋁料。優先滿足主大尺寸，下刀後剩下的廢料直接安插切給較小尺寸，減少切刀次數。
+                   </div>
+                   <h3 style="color: #10b981; border-bottom: 1px solid rgba(16,185,129,0.3); padding-bottom: 0.5rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8L22 12L18 16M6 8L2 12L6 16M2 12H22"/></svg>
+                        <span>總橫料長 <span class="label-model-w"></span></span>
+                        <span id="count6400-w" style="font-size: 0.9rem; margin-left: auto;">0 支</span>
+                   </h3>
+                   <div id="patterns6400-w"></div>
+                   
+                   <h3 style="color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem; margin-top: 2rem; display: flex; align-items: center; gap: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L12 2L16 6M8 18L12 22L16 18M12 2V22"/></svg>
+                        <span>總直料長 <span class="label-model-l"></span></span>
+                        <span id="count6400-l" style="font-size: 0.9rem; margin-left: auto;">0 支</span>
+                   </h3>
+                   <div id="patterns6400-l"></div>
+                </div>
+
+                <!-- 方案 C (混合) 詳細 -->
+                <div id="planMixed" class="plan-view hidden">
+                   <div style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+                       💡 <strong>混合說明：</strong> 本方案混合使用 6000mm 與 6400mm 鋁料。系統動態選擇最適合當時裁切需求的鋁材（最少廢料），可將廢料逼到極限。<br/><br/>
+                   </div>
+                   <h3 style="color: #10b981; border-bottom: 1px solid rgba(16,185,129,0.3); padding-bottom: 0.5rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8L22 12L18 16M6 8L2 12L6 16M2 12H22"/></svg>
+                        <span>總橫料長 <span class="label-model-w"></span></span>
+                   </h3>
+                   <div id="mixedSum-w" style="margin-bottom: 1rem; font-size: 0.95rem; background: rgba(16,185,129,0.1); padding: 0.5rem; border-radius: var(--br-sm);">採買清單：0 支 6000 + 0 支 6400</div>
+                   <div id="patternsMixed-w"></div>
+                   
+                   <h3 style="color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 1rem; margin-top: 2rem; display: flex; align-items: center; gap: 8px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L12 2L16 6M8 18L12 22L16 18M12 2V22"/></svg>
+                        <span>總直料長 <span class="label-model-l"></span></span>
+                   </h3>
+                   <div id="mixedSum-l" style="margin-bottom: 1rem; font-size: 0.95rem; background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: var(--br-sm);">採買清單：0 支 6000 + 0 支 6400</div>
+                   <div id="patternsMixed-l"></div>
+                </div>
+                
+                <!-- 純文字報表容器 -->
+                <div id="simpleReportContainer" class="hidden" style="margin-top: 1rem;">
+
+                     <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
+                        <button id="copyReportBtn" class="btn-primary" style="flex: 1;">📋 一鍵複製 (傳 LINE)</button>
+                        <button id="exportWordBtn" class="btn-secondary" style="flex: 1; background: #2b579a; color: white; border-color: #1e3e6d;">💾 另存為 Word 報表</button>
+                     </div>
+                     <textarea id="simpleReportText" readonly style="width: 100%; height: 400px; padding: 1rem; border-radius: var(--br-md); background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); font-family: 'Inter', monospace; font-size: 0.95rem; resize: vertical; margin-bottom: 1rem;"></textarea>
+                </div>
+                
+                <div id="errorContainer" class="error-container hidden"></div>
+
+            </section>
+        </div>
+    </main>
+
+    <!-- 手機版底部導航 -->
+    <nav id="mobileNav" class="mobile-bottom-nav">
+        <button id="navInputBtn" class="mobile-nav-btn active">
+            <span class="icon">✏️</span>
+            <span>輸入需求</span>
+        </button>
+        <button id="navReportBtn" class="mobile-nav-btn">
+            <span class="icon">📊</span>
+            <span>報表結果</span>
+        </button>
+    </nav>
+
+    <!-- 懸浮財神貓計算機 -->
+    <div id="calculatorWidget" class="calculator-widget hidden">
+        <div class="calc-header">
+            <h3 style="color: var(--text-primary); font-weight: 600;">財神貓計算機</h3>
+            <button id="closeCalcBtn" style="background:transparent; border:none; color:var(--text-secondary); font-size:1.2rem;">✖</button>
+        </div>
+        <div class="calc-display">
+            <input type="text" id="calcInput" readonly value="0">
+        </div>
+        <div class="calc-buttons">
+            <button class="calc-btn btn-clear">C</button>
+            <button class="calc-btn btn-op">÷</button>
+            <button class="calc-btn btn-op">×</button>
+            <button class="calc-btn btn-del">⌫</button>
+            <button class="calc-btn">7</button>
+            <button class="calc-btn">8</button>
+            <button class="calc-btn">9</button>
+            <button class="calc-btn btn-op">-</button>
+            <button class="calc-btn">4</button>
+            <button class="calc-btn">5</button>
+            <button class="calc-btn">6</button>
+            <button class="calc-btn btn-op">+</button>
+            <button class="calc-btn">1</button>
+            <button class="calc-btn">2</button>
+            <button class="calc-btn">3</button>
+            <button class="calc-btn btn-eq" style="grid-row: span 2; background: var(--accent-orange); color: white;">=</button>
+            <button class="calc-btn btn-zero" style="grid-column: span 2;">0</button>
+            <button class="calc-btn">.</button>
+        </div>
+    </div>
+
+    <template id="inputRowTemplate">
+        <div class="input-row req-grid" style="animation: slideIn 0.3s ease-out forwards; padding-bottom: 0.25rem;">
+            <div class="row-num-container" style="color: var(--text-secondary); font-weight: 600; font-size: 0.95rem; text-align: left; padding-left: 8px; cursor: pointer;" title="點擊刪除此行">
+                <span class="row-num">1</span>.
+            </div>
+            
+            <div class="input-group" style="flex-direction: row; align-items: center; gap: 0.25rem;">
+                <input type="number" class="input-width" min="1" step="0.1" placeholder="橫" title="輸入橫料尺寸" style="flex:1; min-width:0;">
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">×</span>
+                <input type="number" class="input-len" min="1" step="0.1" placeholder="直" title="輸入直料尺寸" style="flex:1; min-width:0;">
+            </div>
+            
+            <div class="input-group">
+                <div class="input-finished-container" style="width:100%; padding:0.4rem 0.1rem; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.35); border-radius:var(--br-sm); font-weight:600; text-align:center; min-height:2.2rem; display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
+                    <span class="finish-w" style="color: #10b981;">—</span>
+                    <span style="color: var(--text-secondary); font-size: 0.85rem;">×</span>
+                    <span class="finish-l" style="color: var(--text-primary);">—</span>
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <input type="number" class="input-qty" min="0" step="1" placeholder="數量" style="width: 100%;">
+            </div>
+        </div>
+    </template>
+
+    <script src="calculator.js"></script>
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('服務工作線程 (Service Worker)：註冊成功'))
+                    .catch(err => console.log('服務工作線程 (Service Worker)：註冊失敗:', err));
+            });
+        }
+    </script>
+</body>
+</html>
