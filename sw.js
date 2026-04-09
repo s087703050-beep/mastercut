@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dechang-v2';
+const CACHE_NAME = 'dechang-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -9,8 +9,9 @@ const ASSETS = [
   './manifest.json'
 ];
 
-// Install Event
+// Install Event - 立即啟用新版本
 self.addEventListener('install', event => {
+  self.skipWaiting(); // 強制新 SW 立即接管
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       return cache.addAll(ASSETS);
@@ -18,34 +19,39 @@ self.addEventListener('install', event => {
   );
 });
 
-// Activate Event
+// Activate Event - 清除舊快取並接管所有頁面
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => {
       return Promise.all(
         keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
       );
+    }).then(() => {
+      return self.clients.claim(); // 立即接管所有已開啟的頁面
     })
   );
 });
 
-// Fetch Event
+// Fetch Event - 網路優先策略 (確保使用者總是拿到最新版)
 self.addEventListener('fetch', event => {
   event.respondWith(
-    caches.match(event.request).then(cacheRes => {
-      return cacheRes || fetch(event.request).then(fetchRes => {
-        return caches.open(CACHE_NAME).then(cache => {
-          // Only cache successful GET requests from the same origin
-          if (event.request.method === 'GET' && fetchRes.status === 200) {
-            cache.put(event.request, fetchRes.clone());
-          }
-          return fetchRes;
+    fetch(event.request).then(fetchRes => {
+      // 網路成功：更新快取並回傳
+      if (event.request.method === 'GET' && fetchRes.status === 200) {
+        const resClone = fetchRes.clone();
+        caches.open(CACHE_NAME).then(cache => {
+          cache.put(event.request, resClone);
         });
-      });
-    }).catch(() => {
-      if (event.request.mode === 'navigate') {
-        return caches.match('./index.html');
       }
+      return fetchRes;
+    }).catch(() => {
+      // 網路失敗：使用快取 (離線模式)
+      return caches.match(event.request).then(cacheRes => {
+        if (cacheRes) return cacheRes;
+        if (event.request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
+      });
     })
   );
 });
