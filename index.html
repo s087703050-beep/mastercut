@@ -2,7 +2,8 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="format-detection" content="telephone=no">
     <title>德昌鋁裁料計算機</title>
     <meta name="description" content="幫助您快速計算裁切鋁料的總用量與所需支數，最佳化餘料再利用。">
     <!-- PWA -->
@@ -12,6 +13,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="德昌鋁裁">
     <link rel="apple-touch-icon" href="cat.jpg">
+    <link rel="apple-touch-icon" sizes="180x180" href="cat.jpg">
+    <link rel="apple-touch-icon" sizes="152x152" href="cat.jpg">
+    <link rel="apple-touch-icon" sizes="120x120" href="cat.jpg">
     
     <!-- Google Fonts for Modern Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -73,14 +77,15 @@
 
 
 
-        /* 下方固定導航 (手機版) */
+        /* 下方固定導航 (手機版) - iOS Safe Area 支援 */
         .mobile-bottom-nav {
             display: none;
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            height: 60px;
+            height: calc(60px + env(safe-area-inset-bottom, 0px));
+            padding-bottom: env(safe-area-inset-bottom, 0px);
             background: var(--bg-secondary);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
@@ -123,7 +128,7 @@
                 display: flex;
             }
             .app-container {
-                padding-bottom: 80px; /* 留出底部導航空間 */
+                padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); /* iOS Safe Area */
             }
             /* 預設隱藏右側面板 */
             .result-panel.mobile-hidden {

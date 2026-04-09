@@ -48,6 +48,13 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    -webkit-tap-highlight-color: transparent; /* 移除 iOS 點擊高亮 */
+}
+
+html {
+    /* iOS 彈性滾動 */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 body {
@@ -58,9 +65,15 @@ body {
     color: var(--text-primary);
     line-height: 1.5;
     min-height: 100vh;
+    min-height: -webkit-fill-available; /* iOS Safari 正確的 100vh */
     padding: 2rem;
+    padding-top: calc(2rem + env(safe-area-inset-top, 0px));
+    padding-left: calc(2rem + env(safe-area-inset-left, 0px));
+    padding-right: calc(2rem + env(safe-area-inset-right, 0px));
     transition: background-color 0.3s ease, color 0.3s ease;
     overflow-x: hidden;
+    -webkit-overflow-scrolling: touch; /* iOS 慣性滾動 */
+    overscroll-behavior-y: none; /* 防止 iOS 過度滾動 */
 }
 
 .app-background {
@@ -207,10 +220,15 @@ h1, h2, h3 {
 @media (max-width: 800px) {
     body {
         overflow-x: hidden;
+        padding: 1rem;
+        padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+        padding-left: calc(0.5rem + env(safe-area-inset-left, 0px));
+        padding-right: calc(0.5rem + env(safe-area-inset-right, 0px));
     }
     .app-container {
-        padding: 1rem !important;
-        width: 100vw;
+        padding: 0.5rem !important;
+        width: 100%;
+        max-width: 100vw;
         overflow-x: hidden;
     }
     .content-wrapper {
@@ -229,20 +247,24 @@ h1, h2, h3 {
         height: auto !important;
         box-shadow: var(--glass-shadow) !important;
         background: var(--bg-secondary) !important;
-        backdrop-filter: blur(6px) !important; /* 統一手機版磨砂度 */
+        backdrop-filter: blur(6px) !important;
         -webkit-backdrop-filter: blur(6px) !important;
     }
     .input-panel {
         margin-bottom: 1rem;
     }
     .result-panel {
-        /* 增加底部空間防止被導航蓋住 */
-        padding-bottom: 100px !important;
+        /* iOS Safe Area 底部空間 */
+        padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)) !important;
         margin-top: 1rem;
     }
-    /* 點擊錨點跳轉時的偏移補償 (避免被頂部蓋住，如果有的話) */
     .panel {
         scroll-margin-top: 80px;
+    }
+
+    /* iPhone 輸入優化 */
+    .app-header h1 {
+        font-size: 1.8rem;
     }
 }
 
@@ -324,7 +346,8 @@ h1, h2, h3 {
     text-align: center;
 }
 
-input[type="number"] {
+input[type="number"],
+input[type="text"] {
     width: 100%;
     padding: 0.6rem 0.5rem;
     background: var(--bg-tertiary);
@@ -334,14 +357,20 @@ input[type="number"] {
     font-family: inherit;
     transition: all 0.2s;
     text-align: center;
+    /* iPhone: 防止輸入框聚焦時自動縮放 (需 >= 16px) */
+    font-size: 16px;
+    /* iPhone: 改善觸控體驗 */
+    -webkit-appearance: none;
+    appearance: none;
 }
 
 .req-grid input[type="number"] {
     padding: 0.6rem 0.2rem;
-    font-size: 0.95rem;
+    font-size: 16px; /* iPhone 防縮放，最低 16px */
 }
 
-input[type="number"]:focus {
+input[type="number"]:focus,
+input[type="text"]:focus {
     outline: none;
     border-color: var(--border-color-focus);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
@@ -369,6 +398,10 @@ button {
     border-radius: var(--br-md);
     transition: all 0.2s ease;
     font-weight: 500;
+    -webkit-appearance: none; /* iOS 按鈕樣式正規化 */
+    appearance: none;
+    touch-action: manipulation; /* 移除 iOS 300ms 延遲 */
+    min-height: 44px; /* Apple HIG: 最低觸控目標 44pt */
 }
 
 .btn-icon {
@@ -461,11 +494,11 @@ button {
 }
 
 
-/* Top Controls (Theme & Layout) */
+/* Top Controls (Theme & Layout) - iOS Safe Area 支援 */
 .top-controls {
     position: fixed;
-    top: 1rem;
-    right: 1.5rem;
+    top: calc(1rem + env(safe-area-inset-top, 0px));
+    right: calc(1.5rem + env(safe-area-inset-right, 0px));
     display: flex;
     gap: 0.75rem;
     z-index: 1001;

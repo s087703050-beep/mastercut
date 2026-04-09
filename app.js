@@ -451,9 +451,21 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDisplayView();
     });
 
-    copyReportBtn.addEventListener('click', () => {
-        simpleReportText.select();
-        document.execCommand('copy');
+    copyReportBtn.addEventListener('click', async () => {
+        const textToCopy = simpleReportText.value;
+        
+        // 優先使用 Clipboard API (iOS Safari 13.4+ 支援)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(textToCopy);
+            } catch (err) {
+                // Clipboard API 失敗，使用 fallback
+                iosCopyFallback(simpleReportText);
+            }
+        } else {
+            // 不支援 Clipboard API 時的 iOS 兼容 fallback
+            iosCopyFallback(simpleReportText);
+        }
         
         const oriText = copyReportBtn.textContent;
         copyReportBtn.textContent = '✅ 已成功複製到剪貼簿！';
@@ -463,6 +475,28 @@ document.addEventListener('DOMContentLoaded', () => {
             copyReportBtn.style.background = 'var(--accent-blue)';
         }, 2000);
     });
+
+    // iOS 兼容的複製 fallback
+    function iosCopyFallback(textarea) {
+        const oldReadOnly = textarea.readOnly;
+        const oldContentEditable = textarea.contentEditable;
+        const range = document.createRange();
+        
+        textarea.readOnly = false;
+        textarea.contentEditable = 'true';
+        textarea.focus();
+        
+        // iOS 需要 setSelectionRange 而非 select()
+        textarea.setSelectionRange(0, textarea.value.length);
+        
+        document.execCommand('copy');
+        
+        textarea.readOnly = oldReadOnly;
+        textarea.contentEditable = oldContentEditable;
+        
+        // 取消選取
+        window.getSelection().removeAllRanges();
+    }
 
     // 另存為 Word 報表
     exportWordBtn.addEventListener('click', () => {
@@ -1228,13 +1262,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function generateCombinedSimpleText(wRes, lRes, targetId, projectName, materialModelW, materialModelL) {
-        let planName, stockLabel;
+        let stockLabel;
         if (targetId === 'plan6000') {
-            planName = '方案 A (純 6000mm)'; stockLabel = 6000;
+            stockLabel = 6000;
         } else if (targetId === 'plan6400') {
-            planName = '方案 B (純 6400mm)'; stockLabel = 6400;
+            stockLabel = 6400;
         } else {
-            planName = '方案 C (混合雙料)'; stockLabel = -1;
+            stockLabel = -1;
         }
 
         const wPlan = wRes ? (targetId === 'plan6000' ? wRes.plan6000 : (targetId === 'plan6400' ? wRes.plan6400 : wRes.planMixed)) : null;
@@ -1244,53 +1278,49 @@ document.addEventListener('DOMContentLoaded', () => {
         const g6400 = (wPlan ? (wPlan.totalSticks6400 || 0) : 0) + (lPlan ? (lPlan.totalSticks6400 || 0) : 0);
         const gTotal = (wPlan ? wPlan.totalSticks : 0) + (lPlan ? lPlan.totalSticks : 0);
 
-        const titleProject = projectName ? ` - ${projectName}` : '';
+        const wSticks = wPlan ? wPlan.totalSticks : 0;
+        const lSticks = lPlan ? lPlan.totalSticks : 0;
+        
+        // --- 懶人包精簡格式 ---
+        let text = '';
+        
+        // 標題行：【專案名稱】
+        if (projectName) {
+            text += `【${projectName}】\n`;
+        }
+        
+        // 採購摘要（型號跟在支數後面）
         const suffixW = materialModelW ? ` (${materialModelW})` : '';
         const suffixL = materialModelL ? ` (${materialModelL})` : '';
         
-        let text = `【德昌鋁材裁切報表${titleProject}】\n`;
-        text += `【${planName}】\n`;
-        
-        text += `\n============================\n`;
-        text += `📊 總計採購規模\n`;
-        text += `============================\n`;
         if (stockLabel === -1) {
-            text += `【橫】\n`;
-            text += `採購數：6000:${wPlan ? wPlan.totalSticks6000 : 0}支 / 6400:${wPlan ? wPlan.totalSticks6400 : 0}支 (共${wPlan ? wPlan.totalSticks : 0}支)${suffixW}\n`;
-            text += `【直】\n`;
-            text += `採購數：6000:${lPlan ? lPlan.totalSticks6000 : 0}支 / 6400:${lPlan ? lPlan.totalSticks6400 : 0}支 (共${lPlan ? lPlan.totalSticks : 0}支)${suffixL}\n`;
-            text += `【合計】\n`;
-            text += `需買 6000mm：${g6000} 支\n`;
-            text += `需買 6400mm：${g6400} 支\n`;
-            text += `總計支數：${gTotal} 支\n`;
+            text += ` 【橫】：${wSticks} 支${suffixW}\n`;
+            text += ` 【直】：${lSticks} 支${suffixL}\n`;
+            text += ` 【合計】6000mm：${g6000} 支 / 6400mm：${g6400} 支\n`;
         } else {
-            text += `【橫】：${wPlan ? wPlan.totalSticks : 0} 支${suffixW}\n`;
-            text += `【直】：${lPlan ? lPlan.totalSticks : 0} 支${suffixL}\n`;
-            text += `【合計】需買 ${stockLabel}mm：${gTotal} 支\n`;
+            text += ` 【橫】：${wSticks} 支${suffixW}\n`;
+            text += ` 【直】：${lSticks} 支${suffixL}\n`;
+            text += ` 【合計】${stockLabel}mm：${gTotal} 支\n`;
         }
         
-        text += `\n============================\n`;
-        text += `↔️ 總橫料長 採購與裁切\n`;
-        text += `============================\n`;
-        text += formatSubplanText(wPlan, stockLabel, '橫', materialModelW);
+        // 裁切流程：橫料
+        if (wPlan && wPlan.patterns.length > 0) {
+            const modelTag = materialModelW ? `(${materialModelW})` : '';
+            text += ` 裁切流程 ：${modelTag}\n`;
+            text += generateCompactLinesOnly(wPlan);
+        }
         
-        text += `\n============================\n`;
-        text += `↕️ 總直料長 採購與裁切\n`;
-        text += `============================\n`;
-        text += formatSubplanText(lPlan, stockLabel, '直', materialModelL);
-        
-        // --- 懶人包區塊 ---
-        text += `\n---懶人包--\n`;
-        text += `裁切流 (單行精簡)：↔️ 橫料${suffixW}\n`;
-        text += generateCompactLinesOnly(wPlan);
-        text += `\n裁切流 (單行精簡)：↕️ 直料${suffixL}\n`;
-        text += generateCompactLinesOnly(lPlan);
+        // 裁切流程：直料
+        if (lPlan && lPlan.patterns.length > 0) {
+            const modelTag = materialModelL ? `(${materialModelL})` : '';
+            text += ` 裁切流程 ：${modelTag}\n`;
+            text += generateCompactLinesOnly(lPlan);
+        }
 
-        text += `\n日期：${getDateString()}\n`;
         return text;
     }
 
-    // 輔助函式：僅生成單行精簡裁切流內容
+    // 輔助函式：僅生成單行精簡裁切流內容 (懶人包格式)
     function generateCompactLinesOnly(plan) {
         if (!plan || plan.patterns.length === 0) return "無裁切需求\n";
         let text = "";
@@ -1299,7 +1329,9 @@ document.addEventListener('DOMContentLoaded', () => {
             pattern.cuts.forEach(c => { cutsSummary[c] = (cutsSummary[c] || 0) + 1; });
             let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
             let cutsStr = Object.keys(cutsSummary).sort((a,b) => Number(b) - Number(a)).map(c => `${c}x${cutsSummary[c]}`).join(' ');
-            text += `${pattern.stock}x${pattern.count}= ${cutsStr} 餘${wasteVal}\n`;
+            // 計算切割總用量 (所有切割長度的總和)
+            let totalUsed = pattern.cuts.reduce((sum, c) => sum + c, 0);
+            text += `@${cutsStr} =${totalUsed}餘${wasteVal}\n`;
         });
         return text;
     }
