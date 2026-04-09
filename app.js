@@ -1317,6 +1317,7 @@ document.addEventListener('DOMContentLoaded', () => {
             text += generateCompactLinesOnly(lPlan);
         }
 
+        text += `\n日期：${getDateString()}\n`;
         return text;
     }
 
