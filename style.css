@@ -73,7 +73,8 @@ body {
     transition: background-color 0.3s ease, color 0.3s ease;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch; /* iOS 慣性滾動 */
-    overscroll-behavior-y: none; /* 防止 iOS 過度滾動 */
+    overscroll-behavior-y: none; /* 防止 iOS 橡皮筋回彈 */
+    touch-action: pan-y; /* 限制觸摸行為，防止頁面左右晃動 */
 }
 
 .app-background {
@@ -278,6 +279,7 @@ h1, h2, h3 {
     padding: 1.5rem;
     box-shadow: var(--glass-shadow);
     overflow-y: auto;
+    transform: translateZ(0); /* 強制開啟 GPU 加速，iOS 渲染更流暢 */
 }
 
 @media (min-width: 800px) {
@@ -390,7 +392,7 @@ input[type=number] {
   appearance: textfield;
 }
 
-/* Buttons */
+/* Buttons - 優化手機點擊回應 */
 button {
     cursor: pointer;
     font-family: inherit;
@@ -402,6 +404,21 @@ button {
     appearance: none;
     touch-action: manipulation; /* 移除 iOS 300ms 延遲 */
     min-height: 44px; /* Apple HIG: 最低觸控目標 44pt */
+    position: relative;
+    overflow: hidden;
+}
+
+/* 移除手機上的 Hover，改為 Active 反饋 */
+@media (hover: hover) {
+    button:hover {
+        filter: brightness(1.1);
+        transform: translateY(-2px);
+    }
+}
+
+button:active {
+    transform: scale(0.96) !important;
+    opacity: 0.8;
 }
 
 .btn-icon {
