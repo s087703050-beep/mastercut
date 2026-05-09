@@ -207,6 +207,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     setInterval(updateClock, 1000);
     updateClock();
+    // 觸感回饋 (Android 支援)
+    function hapticFeedback() {
+        if (window.navigator && window.navigator.vibrate) {
+            window.navigator.vibrate(5); // 極短震動
+        }
+    }
 
     // 獲取當地天氣
     async function updateWeather(forceGPS = false) {
@@ -662,9 +668,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    addReqBtn.addEventListener('click', () => addRow(requirementsContainer));
+    addReqBtn.addEventListener('click', () => { hapticFeedback(); addRow(requirementsContainer); });
     
     removeReqBtn.addEventListener('click', () => {
+        hapticFeedback();
         if (requirementsContainer.children.length > 1) {
             const lastChild = requirementsContainer.lastElementChild;
             lastChild.classList.add('fade-out-up'); // 加入退出動畫
@@ -685,6 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     resetBtn.addEventListener('click', () => {
+        hapticFeedback();
         requirementsContainer.innerHTML = '';
         addRow(requirementsContainer);
         kerfInput.value = '5';
@@ -708,7 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (summaryBoard) summaryBoard.classList.remove('glow-effect');
     });
     
-    calculateBtn.addEventListener('click', handleCalculate);
+    calculateBtn.addEventListener('click', () => { hapticFeedback(); handleCalculate(); });
     kerfInput.addEventListener('input', handleLiveCalculate);
     requirementsContainer.addEventListener('input', handleLiveCalculate);
     projectNameInput.addEventListener('input', handleLiveCalculate);
