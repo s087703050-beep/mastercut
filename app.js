@@ -245,7 +245,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (lat && lon) {
                 // 使用 GPS 座標查詢 wttr.in
-                const gpsWRes = await fetch(`https://wttr.in/${lat},${lon}?format=%l:+%c+%C+%t&lang=zh-tw`).then(r => r.text()).catch(()=>'');
+                const response = await fetch(`https://wttr.in/${lat},${lon}?format=%l:+%c+%C+%t&lang=zh-tw`).catch(() => null);
+                const gpsWRes = response && response.ok ? await response.text() : '';
+                
                 if (gpsWRes && gpsWRes.includes(':')) {
                     const parts = gpsWRes.split(':');
                     cityName = parts[0].trim();
@@ -255,12 +257,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 // 預設 IP 定位 (手機行動網路常會被導向台北)
-                const [geoRes, wRes] = await Promise.all([
+                const [geoRes, wResponse] = await Promise.all([
                     fetch('https://ipapi.co/json/').then(r => r.json()).catch(() => ({})),
-                    fetch('https://wttr.in/?format=%c+%C+%t&lang=zh-tw').then(r => r.text()).catch(() => '')
+                    fetch('https://wttr.in/?format=%c+%C+%t&lang=zh-tw').catch(() => null)
                 ]);
+                
                 cityName = geoRes.city || geoRes.region || '';
-                weatherRes = wRes;
+                weatherRes = wResponse && wResponse.ok ? await wResponse.text() : '';
             }
 
             // 台灣地名與南部常見鄉鎮翻譯字典
@@ -313,12 +316,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             function translateWeatherStr(str) {
                 if (!str) return '';
+                // 基礎 HTML/CSS 過濾：如果包含標籤符號、大括號或長度異常，視為無效
+                if (str.includes('<') || str.includes('{') || str.length > 100) return '';
+                
                 let result = str.replace(/\+/g, '');
                 const sortedKeys = Object.keys(weatherCondMap).sort((a, b) => b.length - a.length);
                 sortedKeys.forEach(enWord => {
                     const regex = new RegExp(enWord, 'gi');
                     result = result.replace(regex, weatherCondMap[enWord]);
                 });
+                // 移除剩餘英文字母，保留數字、符號、中文與 Emoji
                 result = result.replace(/[a-zA-Z]/g, '').trim(); 
                 return result;
             }
@@ -328,10 +335,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const isCoord = /^[0-9.,\s-]+$/.test(cityName);
             
-            if (cityName && !isCoord && weatherRes && !weatherRes.includes('<html>')) {
+            // 檢查 weatherRes 是否為有效內容
+            const isValidWeather = weatherRes && !weatherRes.includes('<') && weatherRes.length < 50;
+
+            if (cityName && !isCoord && isValidWeather) {
                 weatherInfo.textContent = `📍 ${cityName} : ${weatherRes}`;
                 weatherInfo.style.display = 'inline-block';
-            } else if (weatherRes && !weatherRes.includes('<html>')) {
+            } else if (isValidWeather) {
                 // 如果抓不到精確地名，預設為「屏東」
                 weatherInfo.textContent = `📍 屏東 : ${weatherRes}`;
                 weatherInfo.style.display = 'inline-block';
@@ -339,6 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 weatherInfo.style.display = 'none';
             }
         } catch (err) {
+            console.error('Weather Update Error:', err);
             weatherInfo.style.display = 'none';
         }
     }

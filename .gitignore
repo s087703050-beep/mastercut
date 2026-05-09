@@ -1,0 +1,19 @@
+# 環境與開發工具資料夾
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 作業系統暫存檔
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# 日誌檔
+*.log
+
+# 未來若使用 npm 的話
+node_modules/
+dist/
+build/
+.env
