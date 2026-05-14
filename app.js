@@ -60,6 +60,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Debounce Helper ---
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+    }
+
     // DOM 元素選取
     const requirementsContainer = document.getElementById('requirementsContainer');
     const addReqBtn = document.getElementById('addReqBtn');
@@ -432,6 +441,71 @@ document.addEventListener('DOMContentLoaded', () => {
     
     addRow(requirementsContainer);
 
+    // --- LocalStorage Persistence Logic ---
+    function saveState() {
+        const rows = [];
+        document.querySelectorAll('#requirementsContainer .input-row').forEach(row => {
+            rows.push({
+                width: row.querySelector('.input-width').value,
+                len: row.querySelector('.input-len').value,
+                qty: row.querySelector('.input-qty').value
+            });
+        });
+
+        const state = {
+            rows: rows,
+            projectName: projectNameInput.value,
+            materialModelW: materialModelInputW.value,
+            materialModelL: materialModelInputL.value,
+            kerf: kerfInput.value,
+            deduct: currentDeduct
+        };
+        localStorage.setItem('calculator_state', JSON.stringify(state));
+    }
+
+    function loadState() {
+        const saved = localStorage.getItem('calculator_state');
+        if (!saved) return false;
+
+        try {
+            const state = JSON.parse(saved);
+            
+            // Set basic inputs
+            projectNameInput.value = state.projectName || '';
+            materialModelInputW.value = state.materialModelW || '';
+            materialModelInputL.value = state.materialModelL || '';
+            kerfInput.value = state.kerf || '5';
+            
+            // Set deduction
+            currentDeduct = state.deduct || 0;
+            deductBtns.forEach(btn => {
+                const isActive = parseFloat(btn.dataset.value) === currentDeduct;
+                btn.style.background = isActive ? 'var(--accent-blue)' : 'var(--bg-tertiary)';
+                btn.style.color = isActive ? 'white' : 'var(--text-secondary)';
+            });
+            deductLabel.textContent = `(橫料標定扣除 −${currentDeduct}mm)`;
+
+            // Restore rows
+            if (state.rows && state.rows.length > 0) {
+                requirementsContainer.innerHTML = '';
+                state.rows.forEach(rowData => {
+                    const row = addRow(requirementsContainer, false); // Pass false to skip save trigger
+                    const div = requirementsContainer.lastElementChild;
+                    div.querySelector('.input-width').value = rowData.width;
+                    div.querySelector('.input-len').value = rowData.len;
+                    div.querySelector('.input-qty').value = rowData.qty;
+                    updateFinishedSize(div);
+                });
+                updateModelLabels();
+                handleLiveCalculate();
+            }
+            return true;
+        } catch (e) {
+            console.error('Failed to load state:', e);
+            return false;
+        }
+    }
+
     // Tab Switch Logic
     tabBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -710,18 +784,33 @@ document.addEventListener('DOMContentLoaded', () => {
         updateModelLabels();
         hideResult();
         handleLiveCalculate();
+        localStorage.removeItem('calculator_state'); // 清空存檔
 
         // 移除總和看板的發光特效
         const summaryBoard = document.getElementById('realtimeSummary');
         if (summaryBoard) summaryBoard.classList.remove('glow-effect');
     });
     
+    // 封裝防抖後的計算
+    const debouncedCalculate = debounce(() => {
+        handleLiveCalculate();
+        saveState();
+    }, 400);
+
     calculateBtn.addEventListener('click', () => { hapticFeedback(); handleCalculate(); });
-    kerfInput.addEventListener('input', handleLiveCalculate);
-    requirementsContainer.addEventListener('input', handleLiveCalculate);
-    projectNameInput.addEventListener('input', handleLiveCalculate);
-    materialModelInputW.addEventListener('input', () => { handleLiveCalculate(); updateModelLabels(); });
-    materialModelInputL.addEventListener('input', () => { handleLiveCalculate(); updateModelLabels(); });
+    kerfInput.addEventListener('input', debouncedCalculate);
+    requirementsContainer.addEventListener('input', debouncedCalculate);
+    projectNameInput.addEventListener('input', debouncedCalculate);
+    materialModelInputW.addEventListener('input', () => { debouncedCalculate(); updateModelLabels(); });
+    materialModelInputL.addEventListener('input', () => { debouncedCalculate(); updateModelLabels(); });
+
+    // 初始化載入
+    window.addEventListener('load', () => {
+        if (!loadState()) {
+            // If no saved state, add at least one row (already called addRow(container) earlier, 
+            // but we might want to ensure one clean row if load fails)
+        }
+    });
 
     function updateModelLabels() {
         const valW = materialModelInputW.value.trim();
@@ -883,6 +972,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateFinishedSize(div) {
         const wEl = div.querySelector('.input-width');
         const lEl = div.querySelector('.input-len');
+        const qtyInput = div.querySelector('.input-qty');
         const finCont = div.querySelector('.input-finished-container');
         const fwEl = div.querySelector('.finish-w');
         const flEl = div.querySelector('.finish-l');
@@ -930,6 +1020,18 @@ document.addEventListener('DOMContentLoaded', () => {
             fwEl.style.color = 'var(--text-secondary)';
             flEl.style.color = 'var(--text-secondary)';
         }
+
+        // Highlight missing quantity if dimensions are present
+        const qtyVal = parseInt(qtyInput.value, 10);
+        if (hasData && (isNaN(qtyVal) || qtyVal <= 0)) {
+            qtyInput.style.borderColor = 'var(--accent-red)';
+            qtyInput.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+            qtyInput.placeholder = '請輸量';
+        } else {
+            qtyInput.style.borderColor = '';
+            qtyInput.style.backgroundColor = '';
+            qtyInput.placeholder = '數量';
+        }
     }
 
     function updateRowIndices() {
@@ -942,7 +1044,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function addRow(container) {
+    function addRow(container, shouldSave = true) {
         const row = template.content.cloneNode(true);
         const div = row.querySelector('.input-row');
         const wInput = div.querySelector('.input-width');
@@ -1002,9 +1104,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 1. 方向判定：橫向滑動 vs 縱向排序
             if (!activeSwipe && !activeReorder) {
-                if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 10) {
+                // 提高閾值至 30px 避免誤觸，且必須明顯大於垂直位移
+                if (Math.abs(diffX) > 30 && Math.abs(diffX) > Math.abs(diffY) * 2) {
                     activeSwipe = true;
-                } else if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 10) {
+                } else if (Math.abs(diffY) > 20 && Math.abs(diffY) > Math.abs(diffX) * 2) {
                     activeReorder = true;
                 }
             }
@@ -1134,7 +1237,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         div.addEventListener('mouseup', () => div.style.cursor = 'grab');
 
-        const triggerChange = () => { updateFinishedSize(div); handleLiveCalculate(); };
+        const triggerChange = () => { 
+            updateFinishedSize(div); 
+            debouncedCalculate(); 
+        };
         wInput.addEventListener('input', triggerChange);
         lInput.addEventListener('input', triggerChange);
         qtyInput.addEventListener('input', triggerChange);
@@ -1142,7 +1248,8 @@ document.addEventListener('DOMContentLoaded', () => {
         container.appendChild(div);
         updateFinishedSize(div);
         updateRowIndices();
-        handleLiveCalculate();
+        if (shouldSave) debouncedCalculate();
+        return div;
     }
     
     function collectData(container) {
