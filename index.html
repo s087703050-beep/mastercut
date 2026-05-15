@@ -38,7 +38,7 @@
             width: 100px;
         }
         .realtime-summary {
-            background: rgba(59, 130, 246, 0.1);
+            background: rgba(59, 130, 246, 0.07);
             border-left: 4px solid var(--accent-blue);
             padding: 1rem;
             margin-top: 1rem;
@@ -54,7 +54,7 @@
             color: var(--text-secondary);
         }
         .realtime-summary strong {
-            color: white;
+            color: var(--text-primary);
             font-size: 1.1rem;
         }
 
@@ -141,7 +141,12 @@
     </style>
 </head>
 <body>
-    <div class="app-background"></div>
+    <div class="app-background">
+        <div class="liquid-blob blob-1"></div>
+        <div class="liquid-blob blob-2"></div>
+        <div class="liquid-blob blob-3"></div>
+        <div class="liquid-blob blob-4"></div>
+    </div>
     <div class="app-background-noise"></div>
     <div class="top-controls">
         <button id="calcToggleBtn" class="control-btn calc-cat-btn" title="打開/關閉財神貓計算機">
@@ -155,7 +160,7 @@
         <header class="app-header">
             <h1>德昌鋁裁料計算機</h1>
             <p>輸入裁切尺寸，自動加總總長度，並為您估計單規裁切所需要的鋁材總支數。</p>
-            <div id="weatherInfo" style="margin-top: 0.5rem; font-size: 1.1rem; color: var(--text-primary); font-weight: 600; display: inline-block; padding: 0.4rem 1.2rem; background: rgba(255,255,255,0.05); border-radius: 50px; border: 1px solid var(--border-color); backdrop-filter: blur(8px); box-shadow: 0 4px 15px rgba(0,0,0,0.1);"></div>
+
             <div id="liveClock" style="margin-top: 0.5rem; font-size: 1.1rem; color: var(--accent-blue); font-weight: 600; letter-spacing: 1px; text-shadow: 0 0 10px rgba(59, 130, 246, 0.3);"></div>
         </header>
 
@@ -171,13 +176,13 @@
                     </summary>
                     <div style="padding-top: 1rem; border-top: 1px solid var(--border-color); margin-top: 0.5rem; display: flex; flex-direction: column; gap: 1rem;">
                         <div style="text-align: center;">
-                            <input type="text" id="projectNameInput" placeholder="📝 案名（選填）" enterkeyhint="next" style="width:100%; padding:0.55rem 0.75rem; background: rgba(0,0,0,0.2); color:var(--text-primary); border:1px solid rgba(255,255,255,0.15); border-radius:var(--br-sm); font-size:0.95rem; text-align: center;">
+                            <input type="text" id="projectNameInput" placeholder="📝 案名（選填）" enterkeyhint="next" style="width:100%; padding:0.55rem 0.75rem; background: var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-color); border-radius:var(--br-sm); font-size:0.95rem; text-align: center;">
                         </div>
                         
                         <div>
                             <div class="settings-row" style="margin-bottom: 0;">
                                  <label for="kerfInput">鋸片厚度 (mm)：</label>
-                                 <input type="number" id="kerfInput" value="5" min="0" step="1" inputmode="decimal" autocomplete="off" enterkeyhint="next" style="background: rgba(0,0,0,0.2);">
+                                 <input type="number" id="kerfInput" value="5" min="0" step="1" inputmode="decimal" autocomplete="off" enterkeyhint="next" style="background: var(--bg-tertiary);">
                             </div>
                             <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; text-align: center;">
                                 「裁切需求尺寸 + 鋸片厚度」 = 每段預留總尺寸
@@ -187,9 +192,9 @@
                         <div>
                             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; margin-bottom:0.5rem;">
                                 <input type="text" id="materialModelInputW" placeholder="📦 橫料型號" enterkeyhint="next"
-                                    style="width:100%; padding:0.55rem 0.75rem; background: rgba(0,0,0,0.2); color:var(--text-primary); border:1px solid rgba(255,255,255,0.15); border-radius:var(--br-sm); font-size:0.95rem; text-align: center;">
+                                    style="width:100%; padding:0.55rem 0.75rem; background: var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-color); border-radius:var(--br-sm); font-size:0.95rem; text-align: center;">
                                 <input type="text" id="materialModelInputL" placeholder="📦 直料型號" enterkeyhint="done"
-                                    style="width:100%; padding:0.55rem 0.75rem; background: rgba(0,0,0,0.2); color:var(--text-primary); border:1px solid rgba(255,255,255,0.15); border-radius:var(--br-sm); font-size:0.95rem; text-align: center;">
+                                    style="width:100%; padding:0.55rem 0.75rem; background: var(--bg-tertiary); color:var(--text-primary); border:1px solid var(--border-color); border-radius:var(--br-sm); font-size:0.95rem; text-align: center;">
                             </div>
                             <div style="font-size: 0.8rem; color: var(--text-secondary); text-align: center;">
                                 💡 887(8公分)：橫料 − 41mm 包外餘量<br>
@@ -231,7 +236,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="list-header req-grid" style="padding: 0.5rem 0; margin-bottom: 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); color: var(--text-primary); font-size: 0.85rem; font-weight: 500; text-align: center;">
+                    <div class="list-header req-grid" style="padding: 0.5rem 0; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-color); color: var(--text-primary); font-size: 0.85rem; font-weight: 500; text-align: center;">
                         <div style="text-align: center; white-space: nowrap; letter-spacing: -0.8px;">序號</div>
                         <div style="white-space: nowrap; letter-spacing: -0.5px;">設計尺寸(寬×高)</div>
                         <div style="white-space: nowrap; letter-spacing: -0.5px;">裁切尺寸(寬×高)</div>
@@ -247,7 +252,7 @@
                     <h3 style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; text-align: center; font-size: 1.1rem;">⚡ 即時加總看板</h3>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
                         <!-- 寬度加總 (淨長) -->
-                        <div id="boxSumW" style="background: rgba(0,0,0,0.2); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid rgba(16,185,129,0.3);">
+                        <div id="boxSumW" style="background: var(--bg-tertiary); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid rgba(16,185,129,0.3);">
                             <div style="font-size: 0.8rem; color: #10b981; margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: center; gap: 4px;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8L22 12L18 16M6 8L2 12L6 16M2 12H22"/></svg>
                                 <span>總橫料長</span>
@@ -258,7 +263,7 @@
                             </div>
                         </div>
                         <!-- 長度加總 (淨長) -->
-                        <div style="background: rgba(0,0,0,0.2); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid var(--border-color);">
+                        <div style="background: var(--bg-tertiary); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid var(--border-color);">
                             <div style="font-size: 0.8rem; color: var(--text-primary); margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: center; gap: 4px;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L12 2L16 6M8 18L12 22L16 18M12 2V22"/></svg>
                                 <span>總直料長</span>
@@ -269,7 +274,7 @@
                             </div>
                         </div>
                         <!-- 橫料鋁料總長 (含鋸片) -->
-                        <div style="background: rgba(0,0,0,0.2); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid rgba(16,185,129,0.3);">
+                        <div style="background: var(--bg-tertiary); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid rgba(16,185,129,0.3);">
                             <div style="font-size: 0.8rem; color: #10b981; margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: center; gap: 4px;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8L22 12L18 16M6 8L2 12L6 16M2 12H22"/></svg>
                                 <span>橫料鋁需(含鋸)</span>
@@ -280,7 +285,7 @@
                             </div>
                         </div>
                         <!-- 直料鋁料總長 (含鋸片) -->
-                        <div style="background: rgba(0,0,0,0.2); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid var(--border-color);">
+                        <div style="background: var(--bg-tertiary); padding: 0.6rem; border-radius: 8px; text-align: center; border: 1px solid var(--border-color);">
                             <div style="font-size: 0.8rem; color: var(--text-primary); margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: center; gap: 4px;">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L12 2L16 6M8 18L12 22L16 18M12 2V22"/></svg>
                                 <span>直料鋁需(含鋸)</span>
@@ -403,7 +408,7 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6L12 2L16 6M8 18L12 22L16 18M12 2V22"/></svg>
                         <span>總直料長 <span class="label-model-l"></span></span>
                    </h3>
-                   <div id="mixedSum-l" style="margin-bottom: 1rem; font-size: 0.95rem; background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: var(--br-sm);">採買清單：0 支 6000 + 0 支 6400</div>
+                   <div id="mixedSum-l" style="margin-bottom: 1rem; font-size: 0.95rem; background: var(--bg-tertiary); padding: 0.5rem; border-radius: var(--br-sm);">採買清單：0 支 6000 + 0 支 6400</div>
                    <div id="patternsMixed-l"></div>
                 </div>
                 
@@ -414,7 +419,7 @@
                         <button id="copyReportBtn" class="btn-primary" style="flex: 1;">📋 一鍵複製 (傳 LINE)</button>
                         <button id="exportWordBtn" class="btn-secondary" style="flex: 1; background: #2b579a; color: white; border-color: #1e3e6d;">💾 另存為 Word 報表</button>
                      </div>
-                     <textarea id="simpleReportText" readonly style="width: 100%; height: 400px; padding: 1rem; border-radius: var(--br-md); background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); font-family: 'Inter', monospace; font-size: 0.95rem; resize: vertical; margin-bottom: 1rem;"></textarea>
+                     <textarea id="simpleReportText" readonly style="width: 100%; min-height: 260px; max-height: 62vh; height: auto; padding: 1rem; border-radius: var(--br-md); background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border-color); font-family: 'Inter', monospace; font-size: 0.95rem; resize: vertical; margin-bottom: 1rem;"></textarea>
                 </div>
                 
                 <div id="errorContainer" class="error-container hidden"></div>
@@ -432,6 +437,10 @@
         <button id="navReportBtn" class="mobile-nav-btn">
             <span class="icon">📊</span>
             <span>報表結果</span>
+        </button>
+        <button id="navCopyBtn" class="mobile-nav-btn">
+            <span class="icon">📋</span>
+            <span>一鍵複製</span>
         </button>
     </nav>
 

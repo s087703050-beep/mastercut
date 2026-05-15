@@ -1,28 +1,33 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // 主題切換邏輯
+    // 主題切換邏輯（預設暗色主題）
     const themeToggleBtn = document.getElementById('themeToggleBtn');
+    // 預設暗色，只有明確存為 'light' 才切換到亮色
     let isLightMode = localStorage.getItem('theme') === 'light';
     
-    if (isLightMode) {
-        document.body.setAttribute('data-theme', 'light');
-        themeToggleBtn.textContent = '🌙';
-        themeToggleBtn.setAttribute('title', '切換暗黑主題');
+    function applyTheme(light) {
+        if (light) {
+            document.body.setAttribute('data-theme', 'light');
+            if (themeToggleBtn) {
+                themeToggleBtn.textContent = '🌙';
+                themeToggleBtn.setAttribute('title', '切換暗色主題');
+            }
+        } else {
+            document.body.removeAttribute('data-theme');
+            if (themeToggleBtn) {
+                themeToggleBtn.textContent = '🌞';
+                themeToggleBtn.setAttribute('title', '切換亮色主題');
+            }
+        }
     }
+
+    // 初始化主題
+    applyTheme(isLightMode);
 
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener('click', () => {
             isLightMode = !isLightMode;
-            if (isLightMode) {
-                document.body.setAttribute('data-theme', 'light');
-                themeToggleBtn.textContent = '🌙';
-                themeToggleBtn.setAttribute('title', '切換暗黑主題');
-                localStorage.setItem('theme', 'light');
-            } else {
-                document.body.removeAttribute('data-theme');
-                themeToggleBtn.textContent = '🌞';
-                themeToggleBtn.setAttribute('title', '切換亮色主題');
-                localStorage.setItem('theme', 'dark');
-            }
+            applyTheme(isLightMode);
+            localStorage.setItem('theme', isLightMode ? 'light' : 'dark');
         });
     }
 
@@ -237,6 +242,47 @@ document.addEventListener('DOMContentLoaded', () => {
         navReportBtn.addEventListener('click', switchToReport);
     }
 
+    // 手機版「一鍵複製」快捷按鈕
+    const navCopyBtn = document.getElementById('navCopyBtn');
+    if (navCopyBtn) {
+        navCopyBtn.addEventListener('click', async () => {
+            hapticFeedback();
+            if (!currentResult) {
+                switchToInput();
+                return;
+            }
+            // 切換到文字模式
+            if (currentViewMode !== 'text') {
+                currentViewMode = 'text';
+                modeTextBtn.style.background = 'var(--accent-blue)';
+                modeTextBtn.style.color = 'white';
+                modeTextBtn.style.borderColor = 'var(--accent-blue)';
+                modeVisualBtn.style.background = 'transparent';
+                modeVisualBtn.style.color = 'var(--text-secondary)';
+                modeVisualBtn.style.borderColor = 'rgba(255,255,255,0.1)';
+                updateDisplayView();
+            }
+            switchToReport();
+            // 複製文字
+            const textToCopy = simpleReportText.value;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                try { await navigator.clipboard.writeText(textToCopy); }
+                catch (err) { iosCopyFallback(simpleReportText); }
+            } else {
+                iosCopyFallback(simpleReportText);
+            }
+            // 視覺回饋
+            const iconEl = navCopyBtn.querySelector('.icon');
+            const origIcon = iconEl.textContent;
+            iconEl.textContent = '✅';
+            navCopyBtn.style.color = 'var(--accent-green)';
+            setTimeout(() => {
+                iconEl.textContent = origIcon;
+                navCopyBtn.style.color = '';
+            }, 2000);
+        });
+    }
+
     // 當使用者滑動時，自動更新按鈕選取狀態 (IntersectionObserver)
     if (window.IntersectionObserver && navInputBtn && navReportBtn) {
         const observerOptions = {
@@ -303,164 +349,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 獲取當地天氣
-    async function updateWeather(forceGPS = false) {
-        const weatherInfo = document.getElementById('weatherInfo');
-        if (!weatherInfo) return;
-        
-        try {
-            weatherInfo.title = '點擊使用 GPS 精確定位';
-            weatherInfo.style.cursor = 'pointer';
-            if (forceGPS) weatherInfo.textContent = '📍 定位中...';
 
-            let lat = null, lon = null;
-            let useGPS = forceGPS;
 
-            // 檢查是否已授權 GPS
-            if (!useGPS && navigator.permissions) {
-                try {
-                    const perm = await navigator.permissions.query({name: 'geolocation'});
-                    if (perm.state === 'granted') useGPS = true;
-                } catch(e) {}
-            }
 
-            // 取得 GPS 座標
-            if (useGPS && navigator.geolocation) {
-                const pos = await new Promise((resolve) => {
-                    navigator.geolocation.getCurrentPosition(resolve, () => resolve(null), {timeout: 8000});
-                });
-                if (pos) {
-                    lat = pos.coords.latitude;
-                    lon = pos.coords.longitude;
-                }
-            }
 
-            let cityName = '';
-            let weatherRes = '';
 
-            if (lat && lon) {
-                // 使用 GPS 座標查詢 wttr.in
-                const response = await fetch(`https://wttr.in/${lat},${lon}?format=%l:+%c+%C+%t&lang=zh-tw`).catch(() => null);
-                const gpsWRes = response && response.ok ? await response.text() : '';
-                
-                if (gpsWRes && gpsWRes.includes(':')) {
-                    const parts = gpsWRes.split(':');
-                    cityName = parts[0].trim();
-                    weatherRes = parts.slice(1).join(':').trim();
-                } else {
-                    weatherRes = gpsWRes;
-                }
-            } else {
-                // 預設 IP 定位 (手機行動網路常會被導向台北)
-                const [geoRes, wResponse] = await Promise.all([
-                    fetch('https://ipapi.co/json/').then(r => r.json()).catch(() => ({})),
-                    fetch('https://wttr.in/?format=%c+%C+%t&lang=zh-tw').catch(() => null)
-                ]);
-                
-                cityName = geoRes.city || geoRes.region || '';
-                weatherRes = wResponse && wResponse.ok ? await wResponse.text() : '';
-            }
-
-            // 台灣地名與南部常見鄉鎮翻譯字典
-            const cityTranslation = {
-                'taipei': '台北', 'new taipei': '新北', 'taoyuan': '桃園',
-                'taichung': '台中', 'tainan': '台南', 'kaohsiung': '高雄',
-                'keelung': '基隆', 'hsinchu': '新竹', 'miaoli': '苗栗',
-                'changhua': '彰化', 'nantou': '南投', 'yunlin': '雲林',
-                'chiayi': '嘉義', 'pingtung': '屏東', 'yilan': '宜蘭',
-                'hualien': '花蓮', 'taitung': '台東', 'penghu': '澎湖',
-                'kinmen': '金門', 'matsu': '馬祖', 'lienchiang': '連江',
-                // 屏東鄉鎮
-                'neipu': '內埔', 'chaozhou': '潮州', 'donggang': '東港', 'hengchun': '恆春',
-                'wandan': '萬丹', 'changzhi': '長治', 'linluo': '麟洛', 'jiuru': '九如',
-                'ligang': '里港', 'gaoshu': '高樹', 'yanpu': '鹽埔', 'majia': '瑪家',
-                'taiwu': '泰武', 'laiyi': '來義', 'chunri': '春日', 'shizi': '獅子',
-                'mudan': '牡丹', 'checheng': '車城', 'manzhou': '滿州', 'fangshan': '枋山',
-                'fangliao': '枋寮', 'jiadong': '佳冬', 'linbian': '林邊', 'nanzhou': '南州',
-                'kanding': '崁頂', 'xinpi': '新埤', 'zhutian': '竹田', 'xinyuan': '新園',
-                'sandimen': '三地門', 'wutai': '霧臺',
-                // 高雄常見區
-                'fengshan': '鳳山', 'daliao': '大寮', 'niaosong': '鳥松', 'renwu': '仁武',
-                'dashe': '大社', 'gangshan': '岡山', 'qiaotou': '橋頭', 'nanzi': '楠梓'
-            };
-            
-            function getChineseCity(enName) {
-                if (!enName) return '';
-                let clean = enName.split(',')[0].toLowerCase().replace(' city', '').replace(' county', '').replace(' township', '').replace(' district', '').trim();
-                return cityTranslation[clean] || enName.split(',')[0];
-            }
-
-            const weatherCondMap = {
-                'clear': '晴朗', 'sunny': '晴天', 'partly cloudy': '多雲時晴', 'cloudy': '多雲', 'overcast': '陰天',
-                'mist': '薄霧', 'fog': '起霧', 'freezing fog': '冰霧',
-                'patchy rain possible': '可能有零星降雨', 'patchy light drizzle': '零星小毛毛雨', 'light drizzle': '小毛毛雨',
-                'freezing drizzle': '凍毛毛雨', 'heavy freezing drizzle': '強凍毛毛雨',
-                'patchy light rain': '零星小雨', 'light rain': '綿綿細雨', 'moderate rain at times': '時有中雨',
-                'moderate rain': '中雨', 'heavy rain at times': '時有大雨', 'heavy rain': '大雨',
-                'light freezing rain': '小凍雨', 'moderate or heavy freezing rain': '中到大凍雨',
-                'light sleet': '小冰霰', 'moderate or heavy sleet': '中到大冰霰',
-                'patchy light snow': '零星小雪', 'light snow': '小雪', 'patchy moderate snow': '零星中雪',
-                'moderate snow': '中雪', 'patchy heavy snow': '零星大雪', 'heavy snow': '大雪',
-                'ice pellets': '冰雹', 'light rain shower': '局部陣雨', 'moderate or heavy rain shower': '中到大陣雨',
-                'torrential rain shower': '暴雨', 'light sleet showers': '小陣冰霰', 'moderate or heavy sleet showers': '中到大陣冰霰',
-                'light snow showers': '小陣雪', 'moderate or heavy snow showers': '中到大陣雪',
-                'light showers of ice pellets': '小陣冰雹', 'moderate or heavy showers of ice pellets': '中到大陣冰雹',
-                'patchy light rain with thunder': '零星雷陣雨', 'moderate or heavy rain with thunder': '中到大雷陣雨',
-                'patchy light snow with thunder': '零星雷陣雪', 'moderate or heavy snow with thunder': '中到大雷陣雪'
-            };
-
-            function translateWeatherStr(str) {
-                if (!str) return '';
-                // 基礎 HTML/CSS 過濾：如果包含標籤符號、大括號或長度異常，視為無效
-                if (str.includes('<') || str.includes('{') || str.length > 100) return '';
-                
-                let result = str.replace(/\+/g, '');
-                const sortedKeys = Object.keys(weatherCondMap).sort((a, b) => b.length - a.length);
-                sortedKeys.forEach(enWord => {
-                    const regex = new RegExp(enWord, 'gi');
-                    result = result.replace(regex, weatherCondMap[enWord]);
-                });
-                // 移除剩餘英文字母，保留數字、符號、中文與 Emoji
-                result = result.replace(/[a-zA-Z]/g, '').trim(); 
-                return result;
-            }
-
-            cityName = getChineseCity(cityName);
-            weatherRes = translateWeatherStr(weatherRes);
-
-            const isCoord = /^[0-9.,\s-]+$/.test(cityName);
-            
-            // 檢查 weatherRes 是否為有效內容
-            const isValidWeather = weatherRes && !weatherRes.includes('<') && weatherRes.length < 50;
-
-            if (cityName && !isCoord && isValidWeather) {
-                weatherInfo.textContent = `📍 ${cityName} : ${weatherRes}`;
-                weatherInfo.style.display = 'inline-block';
-            } else if (isValidWeather) {
-                // 如果抓不到精確地名，預設為「屏東」
-                weatherInfo.textContent = `📍 屏東 : ${weatherRes}`;
-                weatherInfo.style.display = 'inline-block';
-            } else {
-                weatherInfo.style.display = 'none';
-            }
-        } catch (err) {
-            console.error('Weather Update Error:', err);
-            weatherInfo.style.display = 'none';
-        }
-    }
-    
-    // 初始化天氣並設定 30 分鐘刷新
-    updateWeather();
-    setInterval(updateWeather, 30 * 60 * 1000);
-
-    // 點擊觸發 GPS 精確定位
-    const wInfo = document.getElementById('weatherInfo');
-    if (wInfo) {
-        wInfo.addEventListener('click', () => {
-            if (wInfo.textContent.includes('定位中')) return;
-            updateWeather(true);
-        });
-    } 
     
     // Live display
     const liveTotalQty = document.getElementById('liveTotalQty');
@@ -659,11 +552,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     .join('、');
                 let detailText = `拿 <strong>${p.count} 支</strong> ${p.stock}mm 鋁料，裁切內容：${summaryStr}`;
                 
+                let wasteLabel = p.waste <= 300 ? '廢料' : '餘料';
+                let wasteColor = p.waste <= 300 ? '#e11d48' : '#10b981'; 
                 tableHtml += `<tr>
                     <td style="border:1px solid #333; padding:6px; text-align:center;">${i + 1}</td>
                     <td style="border:1px solid #333; padding:6px; text-align:center;">${p.stock} mm</td>
                     <td style="border:1px solid #333; padding:6px;">${detailText}</td>
-                    <td style="border:1px solid #333; padding:6px; text-align:center; color:${p.waste > 100 ? '#e11d48' : '#333'}">${p.waste} mm</td>
+                    <td style="border:1px solid #333; padding:6px; text-align:center; color:${wasteColor}">${wasteLabel} ${p.waste} mm</td>
                 </tr>`;
             });
             tableHtml += '</tbody></table>';
@@ -808,7 +703,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
 
-    calculateBtn.addEventListener('click', () => { hapticFeedback(); handleCalculate(); });
+    calculateBtn.addEventListener('click', () => {
+        hapticFeedback();
+        calculateBtn.disabled = true;
+        calculateBtn.innerHTML = '⏳ 計算中，請稍候...';
+        setTimeout(() => {
+            handleCalculate();
+            calculateBtn.disabled = false;
+            calculateBtn.innerHTML = '✨ 產生完整採購報表';
+        }, 30);
+    });
     kerfInput.addEventListener('input', debouncedCalculate);
     requirementsContainer.addEventListener('input', debouncedCalculate);
     projectNameInput.addEventListener('input', debouncedCalculate);
@@ -875,11 +779,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 ltw.style.color = '#10b981';
                 if (boxW) {
                     boxW.style.borderColor = 'rgba(16,185,129,0.3)';
-                    boxW.style.backgroundColor = 'rgba(0,0,0,0.2)';
+                    boxW.style.backgroundColor = '';
                 }
                 if (boxRW) {
                     boxRW.style.borderColor = 'rgba(16,185,129,0.3)';
-                    boxRW.style.backgroundColor = 'rgba(0,0,0,0.2)';
+                    boxRW.style.backgroundColor = '';
                 }
             } else if (currentDeduct === 51) {
                 lw.style.color = '#ff3333';
@@ -967,7 +871,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Ensure plan tabs and view mode toggles are visible
         planTabs.classList.remove('hidden');
         viewModeToggle.classList.remove('hidden');
-        
+
+        // 手機版：自動切換到文字模式，方便就地複製傳 LINE
+        if (window.innerWidth <= 800 && currentViewMode !== 'text') {
+            currentViewMode = 'text';
+            modeTextBtn.style.background = 'var(--accent-blue)';
+            modeTextBtn.style.color = 'white';
+            modeTextBtn.style.borderColor = 'var(--accent-blue)';
+            modeVisualBtn.style.background = 'transparent';
+            modeVisualBtn.style.color = 'var(--text-secondary)';
+            modeVisualBtn.style.borderColor = 'rgba(255,255,255,0.1)';
+        }
+
         updateDisplayView();
 
         // 如果是手機版，自動切換至報表畫面
@@ -1134,7 +1049,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const children = [
                     {el: div.querySelector('.row-num-container'), speed: 1.0},
                     {el: div.querySelector('.input-width'), speed: 0.85},
-                    {el: div.querySelector('.separator'), speed: 0.8},
                     {el: div.querySelector('.input-len'), speed: 0.75},
                     {el: div.querySelector('.input-finished-container'), speed: 0.7},
                     {el: div.querySelector('.input-qty'), speed: 0.65}
@@ -1393,12 +1307,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const projectName = projectNameInput.value.trim();
             const materialModelW = (materialModelInputW.value || '').trim();
             const materialModelL = (materialModelInputL.value || '').trim();
-            let textRep = generateCombinedSimpleText(wRes, lRes, targetId, projectName, materialModelW, materialModelL);
+            const reqDataForText = collectData(requirementsContainer);
+            let textRep = generateCombinedSimpleText(wRes, lRes, targetId, projectName, materialModelW, materialModelL, reqDataForText);
             simpleReportText.value = textRep;
         }
     }
 
-    function generateCombinedSimpleText(wRes, lRes, targetId, projectName, materialModelW, materialModelL) {
+    function generateCombinedSimpleText(wRes, lRes, targetId, projectName, materialModelW, materialModelL, reqData) {
         let stockLabel;
         if (targetId === 'plan6000') {
             stockLabel = 6000;
@@ -1455,6 +1370,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         text += `\n日期：${getDateString()}\n`;
+
+        // 裁切尺寸數量彙整 (相同尺寸加總)
+        if (reqData && reqData.length > 0) {
+            const wReqs = reqData.filter(r => r.type === '寬');
+            const lReqs = reqData.filter(r => r.type === '長');
+
+            // 輔助：按 displayLength 分組並加總數量
+            function groupAndSum(reqs) {
+                const map = {};
+                reqs.forEach(r => {
+                    const key = r.displayLength;
+                    map[key] = (map[key] || 0) + r.qty;
+                });
+                return Object.entries(map)
+                    .sort((a, b) => Number(b[0]) - Number(a[0]))
+                    .map(([len, qty]) => `${len} x ${qty}隻`);
+            }
+
+            text += `\n裁切尺寸數量\n`;
+
+            if (wReqs.length > 0) {
+                text += `寬:\n`;
+                text += ` ${groupAndSum(wReqs).join('  ')}\n`;
+            }
+
+            if (lReqs.length > 0) {
+                text += `直:\n`;
+                text += ` ${groupAndSum(lReqs).join('  ')}\n`;
+            }
+        }
+
         return text;
     }
 
@@ -1469,7 +1415,8 @@ document.addEventListener('DOMContentLoaded', () => {
             let cutsStr = Object.keys(cutsSummary).sort((a,b) => Number(b) - Number(a)).map(c => `${c}x${cutsSummary[c]}`).join(' ');
             // 計算切割總用量 (所有切割長度的總和)
             let totalUsed = pattern.cuts.reduce((sum, c) => sum + c, 0);
-            text += `@${cutsStr} =${totalUsed}餘${wasteVal}\n`;
+            let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
+            text += `@${cutsStr} =${totalUsed}${wastePrefix}${wasteVal}\n`;
         });
         return text;
     }
@@ -1495,7 +1442,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 .sort((a,b) => Number(b) - Number(a))
                 .map(c => `${c}mm x ${cutsSummary[c]}件`)
                 .join('、');
-            text += `${String(i + 1).padStart(2, ' ')}. [${pattern.count} 支 ${pattern.stock}] 切：${summaryStr} (餘 ${wasteVal})\n`;
+            let wasteLabel = pattern.waste <= 300 ? '廢' : '餘';
+            text += `${String(i + 1).padStart(2, ' ')}. [${pattern.count} 支 ${pattern.stock}] 切：${summaryStr} (${wasteLabel} ${wasteVal})\n`;
         });
         
         text += `\n裁切流 (單行精簡)：${typeLabel}料${modelSuffix}\n`;
@@ -1504,7 +1452,8 @@ document.addEventListener('DOMContentLoaded', () => {
             pattern.cuts.forEach(c => { cutsSummary[c] = (cutsSummary[c] || 0) + 1; });
             let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
             let cutsStr = Object.keys(cutsSummary).sort((a,b) => Number(b) - Number(a)).map(c => `${c}x${cutsSummary[c]}`).join(' ');
-            text += `${pattern.stock}x${pattern.count}= ${cutsStr} 餘${wasteVal}\n`;
+            let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
+            text += `${pattern.stock}x${pattern.count}= ${cutsStr} ${wastePrefix}${wasteVal}\n`;
         });
         
         return text;
@@ -1557,7 +1506,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (pattern.waste > 0) {
                 let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
-                barHtml += `<span style="font-size: 0.85rem; color: #a1a1aa; white-space: nowrap;">廢料 ${wasteVal}mm</span>`;
+                let wasteLabel = pattern.waste <= 300 ? '廢料' : '餘料';
+                let wasteColor = pattern.waste <= 300 ? 'var(--accent-red)' : 'var(--accent-green)';
+                barHtml += `<span style="font-size: 0.85rem; color: ${wasteColor}; white-space: nowrap; font-weight: 600;">${wasteLabel} ${wasteVal}mm</span>`;
             }
             barHtml += '</div>';
             
