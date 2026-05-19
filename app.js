@@ -189,10 +189,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 封裝防抖後的計算
+    // 手機版 800ms（減少頻繁觸發 DFS），桌機 400ms
+    const isMobileDevice = () => window.innerWidth <= 800;
     const debouncedCalculate = debounce(() => {
         if (typeof handleLiveCalculate === 'function') handleLiveCalculate();
         saveState();
-    }, 400);
+    }, isMobileDevice() ? 800 : 400);
 
     // Mobile Nav
     const navInputBtn = document.getElementById('navInputBtn');
@@ -816,7 +818,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (summaryBoard) summaryBoard.classList.add('glow-effect');
             const widthReqs = reqData.filter(r => r.type === '寬');
             const lengthReqs = reqData.filter(r => r.type === '長');
-            
+
+            // 【手機版效能最佳化】
+            // 手機輸入時跳過耗時的 DFS 最佳化，只更新加總看板數字，
+            // 避免每次按鍵都觸發大量計算造成卡頓。
+            // 完整裁切計算等用戶明確按「產生完整採購報表」再執行。
+            if (isMobileDevice()) {
+                // 快速路徑：僅計算總長，不跑 DFS
+                const quickTotalW = widthReqs.reduce((s, r) => s + (r.length + kerf) * r.qty, 0);
+                const quickTotalL = lengthReqs.reduce((s, r) => s + (r.length + kerf) * r.qty, 0);
+                const elTW = document.getElementById('valTotalW');
+                const elTL = document.getElementById('valTotalL');
+                if (!summaryStats.classList.contains('hidden')) {
+                    if (elTW) elTW.textContent = (Number.isInteger(quickTotalW) ? quickTotalW : quickTotalW.toFixed(1)) + ' mm';
+                    if (elTL) elTL.textContent = (Number.isInteger(quickTotalL) ? quickTotalL : quickTotalL.toFixed(1)) + ' mm';
+                }
+                return; // 手機版到此結束，不繼續跑 DFS
+            }
+
+            // 桌機版：正常即時運行完整最佳化
             const liveResult = {
                 widthResult: widthReqs.length > 0 ? window.calculateOptimization(widthReqs, kerf) : null,
                 lengthResult: lengthReqs.length > 0 ? window.calculateOptimization(lengthReqs, kerf) : null,
@@ -1385,7 +1405,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 return Object.entries(map)
                     .sort((a, b) => Number(b[0]) - Number(a[0]))
-                    .map(([len, qty]) => `${len} x ${qty}隻`);
+                    .map(([len, qty]) => `${len} x ${qty}`);
             }
 
             text += `\n裁切尺寸數量\n`;
@@ -1416,7 +1436,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // 計算切割總用量 (所有切割長度的總和)
             let totalUsed = pattern.cuts.reduce((sum, c) => sum + c, 0);
             let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
-            text += `@${cutsStr} =${totalUsed}${wastePrefix}${wasteVal}\n`;
+            // 顯示：[鋁料長×支數] @裁切內容 =用量廢/餘料
+            text += `[${pattern.stock}×${pattern.count}支] @${cutsStr} =${totalUsed}${wastePrefix}${wasteVal}\n`;
         });
         return text;
     }
@@ -1489,6 +1510,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
                 .join('');
 
+            // 刀數計算（段數-1，最後一段不需下刀）
+            const cutsPerStick = pattern.cuts.length;
+            const knifeCount = Math.max(cutsPerStick - 1, 0);
+            const totalKnives = knifeCount * pattern.count;
+
             let barHtml = '<div style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">';
             barHtml += `<div class="stick-bar-container" style="height: 32px; border-radius: 4px; flex-grow: 1;">`;
             
@@ -1511,12 +1537,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 barHtml += `<span style="font-size: 0.85rem; color: ${wasteColor}; white-space: nowrap; font-weight: 600;">${wasteLabel} ${wasteVal}mm</span>`;
             }
             barHtml += '</div>';
-            
+
+            // 搬料徽章
+            const handleBadge = `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(59,130,246,0.15);color:var(--accent-blue);border:1px solid rgba(59,130,246,0.3);padding:0.15rem 0.55rem;border-radius:999px;font-size:0.78rem;font-weight:600;white-space:nowrap;" title="搬料：1次取出 ${pattern.count} 支同規格鋁料">🏗️ 搬 1 次 × ${pattern.count} 支</span>`;
+
+            // 裁切刀數徽章（2刀以下綠色，3-4刀黃色，5刀以上紅色）
+            const knifeBg    = knifeCount <= 2 ? 'rgba(16,185,129,0.15)' : knifeCount <= 4 ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)';
+            const knifeColor = knifeCount <= 2 ? '#10b981' : knifeCount <= 4 ? '#f59e0b' : '#ef4444';
+            const knifeBorder= knifeCount <= 2 ? 'rgba(16,185,129,0.3)' : knifeCount <= 4 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)';
+            const knifeBadge = `<span style="display:inline-flex;align-items:center;gap:4px;background:${knifeBg};color:${knifeColor};border:1px solid ${knifeBorder};padding:0.15rem 0.55rem;border-radius:999px;font-size:0.78rem;font-weight:600;white-space:nowrap;" title="每支裁 ${knifeCount} 刀，這批共 ${totalKnives} 刀">✂️ 每支 ${knifeCount} 刀（共 ${totalKnives} 刀）</span>`;
+
             let html = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <h4 style="color:var(--text-primary); margin:0; font-size: 1.1rem;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:0.5rem;">
+                    <h4 style="color:var(--text-primary); margin:0; font-size: 1.1rem; flex:1 1 auto;">
                         👉 拿 <span style="font-size: 1.4rem; color: ${stockColor};"> ${pattern.count} </span> 支 <span style="font-size: 1.2rem; color: ${stockColor}; border-bottom: 2px solid ${stockColor};">${stockLength}</span> mm 鋁料，照以下圖解裁切：
                     </h4>
+                    <div style="display:flex;gap:0.35rem;flex-wrap:wrap;align-items:center;flex-shrink:0;">${handleBadge}${knifeBadge}</div>
                 </div>
                 ${barHtml}
                 <div style="margin-top: 0.75rem; font-size: 0.95rem; color: var(--text-secondary);">
