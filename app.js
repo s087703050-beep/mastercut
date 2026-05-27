@@ -832,47 +832,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // --- 實時更新：採購需求與裁切建議 ---
+        // --- 實時更新：僅加總看板，不跑耗時的裁切最佳化 ---
         const summaryBoard = document.getElementById('realtimeSummary');
         if (reqData.length > 0) {
             if (summaryBoard) summaryBoard.classList.add('glow-effect');
             const widthReqs = reqData.filter(r => r.type === '寬');
             const lengthReqs = reqData.filter(r => r.type === '長');
 
-            // 【手機版效能最佳化】
-            // 手機輸入時跳過耗時的 DFS 最佳化，只更新加總看板數字，
-            // 避免每次按鍵都觸發大量計算造成卡頓。
-            // 完整裁切計算等用戶明確按「產生完整採購報表」再執行。
-            if (isMobileDevice()) {
-                // 快速路徑：僅計算總長，不跑 DFS
-                const quickTotalW = widthReqs.reduce((s, r) => s + (r.length + kerf) * r.qty, 0);
-                const quickTotalL = lengthReqs.reduce((s, r) => s + (r.length + kerf) * r.qty, 0);
-                const elTW = document.getElementById('valTotalW');
-                const elTL = document.getElementById('valTotalL');
-                if (!summaryStats.classList.contains('hidden')) {
-                    if (elTW) elTW.textContent = (Number.isInteger(quickTotalW) ? quickTotalW : quickTotalW.toFixed(1)) + ' mm';
-                    if (elTL) elTL.textContent = (Number.isInteger(quickTotalL) ? quickTotalL : quickTotalL.toFixed(1)) + ' mm';
-                }
-                return; // 手機版到此結束，不繼續跑 DFS
-            }
-
-            // 桌機版：正常即時運行完整最佳化
-            const liveResult = {
-                widthResult: widthReqs.length > 0 ? window.calculateOptimization(widthReqs, kerf) : null,
-                lengthResult: lengthReqs.length > 0 ? window.calculateOptimization(lengthReqs, kerf) : null,
-                success: true
-            };
-
-            // 更新採購看板數字與 Tab 標記
-            renderSummaryNumbers(liveResult);
-            
-            // 如果結果區域已經開啟(例如按過一次開始計算)，則同步更新詳細圖解/文字
+            // 快速路徑：僅計算並更新實時看板的總長，不跑耗時的 DFS 最佳化，
+            // 避免任何頻繁輸入造成卡頓。完整裁切計算等用戶點擊「產生完整採購報表」再執行。
+            const quickTotalW = widthReqs.reduce((s, r) => s + (r.length + kerf) * r.qty, 0);
+            const quickTotalL = lengthReqs.reduce((s, r) => s + (r.length + kerf) * r.qty, 0);
+            const elTW = document.getElementById('valTotalW');
+            const elTL = document.getElementById('valTotalL');
             if (!summaryStats.classList.contains('hidden')) {
-                prepareColorMap(reqData);
-                currentResult = liveResult;
-                planTabs.classList.remove('hidden');
-                viewModeToggle.classList.remove('hidden');
-                updateDisplayView();
+                if (elTW) elTW.textContent = (Number.isInteger(quickTotalW) ? quickTotalW : quickTotalW.toFixed(1)) + ' mm';
+                if (elTL) elTL.textContent = (Number.isInteger(quickTotalL) ? quickTotalL : quickTotalL.toFixed(1)) + ' mm';
             }
         } else {
             if (summaryBoard) summaryBoard.classList.remove('glow-effect');
