@@ -1425,19 +1425,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 return Object.entries(map)
                     .sort((a, b) => Number(b[0]) - Number(a[0]))
-                    .map(([len, qty]) => `${len} x ${qty}`);
+                    .map(([len, qty]) => `${len} × ${qty}`);
             }
 
             text += `\n裁切尺寸數量\n`;
 
             if (wReqs.length > 0) {
-                text += `寬:\n`;
-                text += ` ${groupAndSum(wReqs).join('  ')}\n`;
+                text += `寬：\n`;
+                text += ` ${groupAndSum(wReqs).join('，')}\n`;
             }
 
             if (lReqs.length > 0) {
-                text += `直:\n`;
-                text += ` ${groupAndSum(lReqs).join('  ')}\n`;
+                text += `直：\n`;
+                text += ` ${groupAndSum(lReqs).join('，')}\n`;
             }
         }
 
@@ -1448,18 +1448,38 @@ document.addEventListener('DOMContentLoaded', () => {
     function generateCompactLinesOnly(plan) {
         if (!plan || plan.patterns.length === 0) return "無裁切需求\n";
         let text = "";
+        
+        let maxCutsLen = 0;
+        let patternCuts = [];
+        
         plan.patterns.forEach((pattern) => {
             let cutsSummary = {};
             pattern.cuts.forEach(c => { cutsSummary[c] = (cutsSummary[c] || 0) + 1; });
-            let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
-            let cutsStr = Object.keys(cutsSummary).sort((a,b) => Number(b) - Number(a)).map(c => `${c} × ${cutsSummary[c]}`).join('，');
-            // 計算切割總用量 (所有切割長度的總和)
-            let totalUsed = pattern.cuts.reduce((sum, c) => sum + c, 0);
-            let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
+            let cutsStr = Object.keys(cutsSummary)
+                .sort((a,b) => Number(b) - Number(a))
+                .map(c => `${c} × ${cutsSummary[c]}`)
+                .join('，');
             
-            // 易讀對齊格式：[6000 × 17 支] ➔ 裁：1064 × 4，814 × 2 (用5884｜廢91)
+            patternCuts.push({
+                pattern: pattern,
+                cutsStr: cutsStr
+            });
+            
+            if (cutsStr.length > maxCutsLen) {
+                maxCutsLen = cutsStr.length;
+            }
+        });
+        
+        patternCuts.forEach(({ pattern, cutsStr }) => {
+            let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
+            let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
             let countStr = String(pattern.count).padStart(2, ' ');
-            text += `[ ${pattern.stock} × ${countStr} 支 ] ➔ 裁：${cutsStr} (用${totalUsed}｜${wastePrefix}${wasteVal})\n`;
+            
+            // Align cutsStr by padding it with spaces
+            let cutsStrPadded = cutsStr.padEnd(maxCutsLen, ' ');
+            
+            // Format: 6000 × 17 ➔ 1064 × 4，814 × 2  餘91
+            text += ` ${pattern.stock} × ${countStr} ➔ ${cutsStrPadded}  ${wastePrefix}${wasteVal}\n`;
         });
         return text;
     }
@@ -1490,15 +1510,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         text += `\n裁切流 (單行精簡)：${typeLabel}料${modelSuffix}\n`;
+        
+        let maxCutsLen = 0;
+        let patternCuts = [];
+        
         plan.patterns.forEach((pattern) => {
             let cutsSummary = {};
             pattern.cuts.forEach(c => { cutsSummary[c] = (cutsSummary[c] || 0) + 1; });
+            let cutsStr = Object.keys(cutsSummary)
+                .sort((a,b) => Number(b) - Number(a))
+                .map(c => `${c} × ${cutsSummary[c]}`)
+                .join('，');
+            
+            patternCuts.push({
+                pattern: pattern,
+                cutsStr: cutsStr
+            });
+            
+            if (cutsStr.length > maxCutsLen) {
+                maxCutsLen = cutsStr.length;
+            }
+        });
+        
+        patternCuts.forEach(({ pattern, cutsStr }) => {
             let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
-            let cutsStr = Object.keys(cutsSummary).sort((a,b) => Number(b) - Number(a)).map(c => `${c} × ${cutsSummary[c]}`).join('，');
-            let totalUsed = pattern.cuts.reduce((sum, c) => sum + c, 0);
             let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
             let countStr = String(pattern.count).padStart(2, ' ');
-            text += `[ ${pattern.stock} × ${countStr} 支 ] ➔ 裁：${cutsStr} (用${totalUsed}｜${wastePrefix}${wasteVal})\n`;
+            
+            let cutsStrPadded = cutsStr.padEnd(maxCutsLen, ' ');
+            text += ` ${pattern.stock} × ${countStr} ➔ ${cutsStrPadded}  ${wastePrefix}${wasteVal}\n`;
         });
         
         return text;
