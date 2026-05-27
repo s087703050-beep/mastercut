@@ -478,6 +478,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 2000);
     });
 
+    const docsReportBtn = document.getElementById('docsReportBtn');
+    if (docsReportBtn) {
+        docsReportBtn.addEventListener('click', async () => {
+            const textToCopy = simpleReportText.value;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                try { await navigator.clipboard.writeText(textToCopy); }
+                catch (err) { iosCopyFallback(simpleReportText); }
+            } else {
+                iosCopyFallback(simpleReportText);
+            }
+            
+            const oriText = docsReportBtn.textContent;
+            docsReportBtn.textContent = '✅ 已複製！開啟文件中...';
+            setTimeout(() => {
+                window.open('https://docs.new', '_blank');
+                docsReportBtn.textContent = oriText;
+            }, 800);
+        });
+    }
+
     // iOS 兼容的複製 fallback
     function iosCopyFallback(textarea) {
         const oldReadOnly = textarea.readOnly;
@@ -1432,12 +1452,14 @@ document.addEventListener('DOMContentLoaded', () => {
             let cutsSummary = {};
             pattern.cuts.forEach(c => { cutsSummary[c] = (cutsSummary[c] || 0) + 1; });
             let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
-            let cutsStr = Object.keys(cutsSummary).sort((a,b) => Number(b) - Number(a)).map(c => `${c}x${cutsSummary[c]}`).join(' ');
+            let cutsStr = Object.keys(cutsSummary).sort((a,b) => Number(b) - Number(a)).map(c => `${c} × ${cutsSummary[c]}`).join('，');
             // 計算切割總用量 (所有切割長度的總和)
             let totalUsed = pattern.cuts.reduce((sum, c) => sum + c, 0);
             let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
-            // 顯示：[鋁料長×支數] @裁切內容 =用量廢/餘料
-            text += `[${pattern.stock}×${pattern.count}支] @${cutsStr} =${totalUsed}${wastePrefix}${wasteVal}\n`;
+            
+            // 易讀對齊格式：[6000 × 17 支] ➔ 裁：1064 × 4，814 × 2 (用5884｜廢91)
+            let countStr = String(pattern.count).padStart(2, ' ');
+            text += `[ ${pattern.stock} × ${countStr} 支 ] ➔ 裁：${cutsStr} (用${totalUsed}｜${wastePrefix}${wasteVal})\n`;
         });
         return text;
     }
@@ -1472,9 +1494,11 @@ document.addEventListener('DOMContentLoaded', () => {
             let cutsSummary = {};
             pattern.cuts.forEach(c => { cutsSummary[c] = (cutsSummary[c] || 0) + 1; });
             let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
-            let cutsStr = Object.keys(cutsSummary).sort((a,b) => Number(b) - Number(a)).map(c => `${c}x${cutsSummary[c]}`).join(' ');
+            let cutsStr = Object.keys(cutsSummary).sort((a,b) => Number(b) - Number(a)).map(c => `${c} × ${cutsSummary[c]}`).join('，');
+            let totalUsed = pattern.cuts.reduce((sum, c) => sum + c, 0);
             let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
-            text += `${pattern.stock}x${pattern.count}= ${cutsStr} ${wastePrefix}${wasteVal}\n`;
+            let countStr = String(pattern.count).padStart(2, ' ');
+            text += `[ ${pattern.stock} × ${countStr} 支 ] ➔ 裁：${cutsStr} (用${totalUsed}｜${wastePrefix}${wasteVal})\n`;
         });
         
         return text;
