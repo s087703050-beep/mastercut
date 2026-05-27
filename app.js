@@ -1416,11 +1416,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const wReqs = reqData.filter(r => r.type === '寬');
             const lReqs = reqData.filter(r => r.type === '長');
 
-            // 輔助：按 displayLength 分組並加總數量
+            // 輔助：按實際裁切長度 length 分組並加總數量
             function groupAndSum(reqs) {
                 const map = {};
                 reqs.forEach(r => {
-                    const key = r.displayLength;
+                    const key = r.length;
                     map[key] = (map[key] || 0) + r.qty;
                 });
                 return Object.entries(map)
