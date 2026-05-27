@@ -1411,56 +1411,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
             text += `\n裁切尺寸數量\n`;
 
+            // 每行最多 3 項，超過就換行
+            function chunked(arr, size) {
+                const result = [];
+                for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size));
+                return result;
+            }
+
             if (wReqs.length > 0) {
                 text += `寬：\n`;
-                text += ` ${groupAndSum(wReqs).join('，')}\n`;
+                chunked(groupAndSum(wReqs), 3).forEach(row => {
+                    text += ` ${row.join('，')}\n`;
+                });
             }
 
             if (lReqs.length > 0) {
                 text += `直：\n`;
-                text += ` ${groupAndSum(lReqs).join('，')}\n`;
+                chunked(groupAndSum(lReqs), 3).forEach(row => {
+                    text += ` ${row.join('，')}\n`;
+                });
             }
         }
 
         return text;
     }
 
-    // 輔助函式：僅生成單行精簡裁切流內容 (懶人包格式)
+    // 輔助函式：僅生成雙行精簡裁切流內容 (懶人包格式)
     function generateCompactLinesOnly(plan) {
         if (!plan || plan.patterns.length === 0) return "無裁切需求\n";
         let text = "";
         
-        let maxCutsLen = 0;
-        let patternCuts = [];
-        
         plan.patterns.forEach((pattern) => {
             let cutsSummary = {};
             pattern.cuts.forEach(c => { cutsSummary[c] = (cutsSummary[c] || 0) + 1; });
-            let cutsStr = Object.keys(cutsSummary)
+            let cutItems = Object.keys(cutsSummary)
                 .sort((a,b) => Number(b) - Number(a))
-                .map(c => `${c} × ${cutsSummary[c]}`)
-                .join('，');
+                .map(c => `${c} × ${cutsSummary[c]}`);
             
-            patternCuts.push({
-                pattern: pattern,
-                cutsStr: cutsStr
-            });
-            
-            if (cutsStr.length > maxCutsLen) {
-                maxCutsLen = cutsStr.length;
+            // 裁切規格：最多3項一行，超過就換行並縮排
+            let cutLines = [];
+            for (let i = 0; i < cutItems.length; i += 3) {
+                cutLines.push(cutItems.slice(i, i + 3).join('，'));
             }
-        });
-        
-        patternCuts.forEach(({ pattern, cutsStr }) => {
+            
             let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
             let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
             let countStr = String(pattern.count).padStart(2, ' ');
             
-            // Align cutsStr by padding it with spaces
-            let cutsStrPadded = cutsStr.padEnd(maxCutsLen, ' ');
-            
-            // Format: 6000 × 17 ➔ 1064 × 4，814 × 2  餘91
-            text += ` ${pattern.stock} × ${countStr} ➔ ${cutsStrPadded}  ${wastePrefix}${wasteVal}\n`;
+            // 第一行：原料支數
+            text += ` ${pattern.stock} × ${countStr}\n`;
+            // 後續行：裁切規格（最後一行加上餘料）
+            cutLines.forEach((line, idx) => {
+                if (idx === cutLines.length - 1) {
+                    text += `   ➔ ${line}  ${wastePrefix}${wasteVal}\n`;
+                } else {
+                    text += `   ➔ ${line}\n`;
+                }
+            });
         });
         return text;
     }
@@ -1490,36 +1497,33 @@ document.addEventListener('DOMContentLoaded', () => {
             text += `${String(i + 1).padStart(2, ' ')}. [${pattern.count} 支 ${pattern.stock}] 切：${summaryStr} (${wasteLabel} ${wasteVal})\n`;
         });
         
-        text += `\n裁切流 (單行精簡)：${typeLabel}料${modelSuffix}\n`;
-        
-        let maxCutsLen = 0;
-        let patternCuts = [];
+        text += `\n裁切流 (精簡)：${typeLabel}料${modelSuffix}\n`;
         
         plan.patterns.forEach((pattern) => {
             let cutsSummary = {};
             pattern.cuts.forEach(c => { cutsSummary[c] = (cutsSummary[c] || 0) + 1; });
-            let cutsStr = Object.keys(cutsSummary)
+            let cutItems = Object.keys(cutsSummary)
                 .sort((a,b) => Number(b) - Number(a))
-                .map(c => `${c} × ${cutsSummary[c]}`)
-                .join('，');
+                .map(c => `${c} × ${cutsSummary[c]}`);
             
-            patternCuts.push({
-                pattern: pattern,
-                cutsStr: cutsStr
-            });
-            
-            if (cutsStr.length > maxCutsLen) {
-                maxCutsLen = cutsStr.length;
+            // 最多3項一行
+            let cutLines = [];
+            for (let i = 0; i < cutItems.length; i += 3) {
+                cutLines.push(cutItems.slice(i, i + 3).join('，'));
             }
-        });
-        
-        patternCuts.forEach(({ pattern, cutsStr }) => {
+            
             let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
             let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
             let countStr = String(pattern.count).padStart(2, ' ');
             
-            let cutsStrPadded = cutsStr.padEnd(maxCutsLen, ' ');
-            text += ` ${pattern.stock} × ${countStr} ➔ ${cutsStrPadded}  ${wastePrefix}${wasteVal}\n`;
+            text += ` ${pattern.stock} × ${countStr}\n`;
+            cutLines.forEach((line, idx) => {
+                if (idx === cutLines.length - 1) {
+                    text += `   ➔ ${line}  ${wastePrefix}${wasteVal}\n`;
+                } else {
+                    text += `   ➔ ${line}\n`;
+                }
+            });
         });
         
         return text;
