@@ -728,12 +728,18 @@ document.addEventListener('DOMContentLoaded', () => {
     calculateBtn.addEventListener('click', () => {
         hapticFeedback();
         calculateBtn.disabled = true;
-        calculateBtn.innerHTML = '⏳ 計算中，請稍候...';
+        calculateBtn.innerHTML = `
+            <svg class="loading-hourglass" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; vertical-align: middle; display: inline-block;">
+                <path d="M5 2h14M5 22h14M19 2v4a7 7 0 0 1-7 7 7 7 0 0 1-7-7V2M19 22v-4a7 7 0 0 0-7-7 7 7 0 0 0-7 7v4" />
+                <path d="M12 2v6" />
+                <path d="M12 16v6" />
+            </svg>計算中，請稍候...
+        `;
         setTimeout(() => {
             handleCalculate();
             calculateBtn.disabled = false;
             calculateBtn.innerHTML = '✨ 產生完整採購報表';
-        }, 30);
+        }, 450); // Using 450ms delay so that the beautiful SVG hourglass animation flips elegantly and provides satisfying, professional feedback!
     });
     kerfInput.addEventListener('input', debouncedCalculate);
     requirementsContainer.addEventListener('input', debouncedCalculate);

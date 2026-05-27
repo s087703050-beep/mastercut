@@ -1058,3 +1058,17 @@ button:active {
     background: rgba(59, 130, 246, 0.08);
     color: var(--accent-blue);
 }
+
+/* Loading Hourglass Animation */
+@keyframes spin-hourglass {
+    0% { transform: rotate(0deg); }
+    35% { transform: rotate(0deg); }
+    50% { transform: rotate(180deg); }
+    85% { transform: rotate(180deg); }
+    100% { transform: rotate(360deg); }
+}
+.loading-hourglass {
+    animation: spin-hourglass 1.8s infinite ease-in-out;
+    transform-origin: center;
+    display: inline-block;
+}
