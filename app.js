@@ -520,159 +520,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.getSelection().removeAllRanges();
     }
 
-    // 另存為 Word 報表
-    exportWordBtn.addEventListener('click', () => {
-        if (!currentResult) {
-            alert('請先產生採購報表！');
-            return;
-        }
-        exportToWord();
-    });
 
-    function exportToWord() {
-        const projectName = document.getElementById('projectNameInput').value || '未命名專案';
-        const dateStr = new Date().toLocaleString('zh-TW');
-        const wRes = currentResult.widthResult;
-        const lRes = currentResult.lengthResult;
-        const materialModelW = materialModelInputW.value.trim();
-        const materialModelL = materialModelInputL.value.trim();
-        
-        // 取得當前所選方案 (plan6000 / plan6400 / planMixed)
-        const activeTab = document.querySelector('.plan-tab.active');
-        const planKey = activeTab ? activeTab.dataset.target : 'planMixed';
-        const planNameMapping = {
-            'plan6000': '方案 A: 純 6000mm',
-            'plan6400': '方案 B: 純 6400mm',
-            'planMixed': '方案 C: 混合雙料'
-        };
-        const planName = planNameMapping[planKey] || '裁切報表';
-
-        function formatPlanCount(plan) {
-            if (!plan) return '0';
-            if (plan.totalSticks6000 !== undefined) {
-                return `${plan.totalSticks6000} 支 (6M) + ${plan.totalSticks6400} 支 (6.4M)`;
-            }
-            return `${plan.totalSticks} 支`;
-        }
-
-        function generateTableFromPatterns(patterns) {
-            if (!patterns || patterns.length === 0) return '<p style="color:#888;">無裁切數據</p>';
-            let tableHtml = '<table style="width:100%; border-collapse:collapse; margin-bottom:20px; font-size:12px;">' +
-                           '<thead><tr style="background-color:#f2f2f2;">' +
-                           '<th style="border:1px solid #333; padding:6px; width:50px;">編號</th>' +
-                           '<th style="border:1px solid #333; padding:6px; width:100px;">原始長度</th>' +
-                           '<th style="border:1px solid #333; padding:6px;">裁切流明細 (淨長)</th>' +
-                           '<th style="border:1px solid #333; padding:6px; width:80px;">剩餘廢料</th>' +
-                           '</tr></thead><tbody>';
-            
-            patterns.forEach((p, i) => {
-                let cutsSummary = {};
-                p.cuts.forEach(c => { cutsSummary[c] = (cutsSummary[c] || 0) + 1; });
-                let summaryStr = Object.keys(cutsSummary)
-                    .sort((a,b) => Number(b) - Number(a))
-                    .map(c => `${c}x${cutsSummary[c]}`)
-                    .join('、');
-                let detailText = `拿 <strong>${p.count} 支</strong> ${p.stock}mm 鋁料，裁切內容：${summaryStr}`;
-                
-                let wasteLabel = p.waste <= 300 ? '廢料' : '餘料';
-                let wasteColor = p.waste <= 300 ? '#e11d48' : '#10b981'; 
-                tableHtml += `<tr>
-                    <td style="border:1px solid #333; padding:6px; text-align:center;">${i + 1}</td>
-                    <td style="border:1px solid #333; padding:6px; text-align:center;">${p.stock} mm</td>
-                    <td style="border:1px solid #333; padding:6px;">${detailText}</td>
-                    <td style="border:1px solid #333; padding:6px; text-align:center; color:${wasteColor}">${wasteLabel} ${p.waste} mm</td>
-                </tr>`;
-            });
-            tableHtml += '</tbody></table>';
-            return tableHtml;
-        }
-
-        const html = `
-            <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-            <head><meta charset='utf-8'><title>裁切報表 - ${projectName}</title>
-            <style>
-                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333; }
-                .header-title { color: #2b579a; border-bottom: 2px solid #2b579a; padding-bottom: 10px; margin-bottom: 20px; text-align: center; }
-                .info-grid { margin-bottom: 25px; }
-                .section-header { background-color: #2b579a; color: white; padding: 8px 15px; margin: 30px 0 15px 0; font-weight: bold; border-radius: 4px; }
-                .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                .summary-table th, .summary-table td { border: 1px solid #ccc; padding: 10px; text-align: center; }
-                .summary-table th { background-color: #f8f9fa; }
-                .compact-list { background-color: #f1f1f1; padding: 15px; border: 1px solid #ddd; font-family: 'Consolas', monospace; white-space: pre-wrap; font-size: 11px; }
-                .footer { margin-top: 50px; text-align: right; font-size: 10px; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
-                .page-break { page-break-before: always; }
-            </style>
-            </head>
-            <body>
-                <div class="header-title">
-                    <h1>德昌鋁計算機 - 專業裁切採購報表</h1>
-                </div>
-
-                <div class="info-grid">
-                    <p><strong>專案名稱：</strong> ${projectName}</p>
-                    <p><strong>產生日期：</strong> ${dateStr}</p>
-                    <p><strong>選定方案：</strong> ${planName}</p>
-                </div>
-
-                <div class="section-header">一、 採購統計概覽</div>
-                <table class="summary-table">
-                    <thead>
-                        <tr>
-                            <th>項目類型</th>
-                            <th>指定型號</th>
-                            <th>所需總長 (含鋸片)</th>
-                            <th>建議採購支數</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><strong>橫料 (寬度)</strong></td>
-                            <td>887 (8公分)</td>
-                            <td>${wRes ? Math.round(wRes.totalLength) : 0} mm</td>
-                            <td>${wRes ? formatPlanCount(wRes[planKey]) : 0}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>直料 (長度)</strong></td>
-                            <td>1087 (10公分)</td>
-                            <td>${lRes ? Math.round(lRes.totalLength) : 0} mm</td>
-                            <td>${lRes ? formatPlanCount(lRes[planKey]) : 0}</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                <br clear="all" style="page-break-before:always" />
-
-                <div class="section-header">二、 裁切流詳細清單 (正式表格)</div>
-                <h3 style="color: #10b981;">↔️ 總橫料長 ${materialModelW ? '(' + materialModelW + ')' : ''}</h3>
-                <p style="font-weight:bold; color:#10b981; margin-bottom:10px;">總計需採購：${wRes ? formatPlanCount(wRes[planKey]) : 0}</p>
-                ${generateTableFromPatterns(wRes ? wRes[planKey].patterns : [])}
-                
-                <h3 style="color: #475569;">↕️ 總直料長 ${materialModelL ? '(' + materialModelL + ')' : ''}</h3>
-                <p style="font-weight:bold; color:#475569; margin-bottom:10px;">總計需採購：${lRes ? formatPlanCount(lRes[planKey]) : 0}</p>
-                ${generateTableFromPatterns(lRes ? lRes[planKey].patterns : [])}
-
-                <br clear="all" style="page-break-before:always" />
-
-                <div class="section-header">三、 精簡裁切清單 (一鍵複製專用格式)</div>
-                <div class="compact-list">${simpleReportText.value.replace(/\n/g, '<br>')}</div>
-
-                <div class="footer">
-                    此報表由 德昌鋁計算機 (混合高規版) 自動生成。所有計算結果僅供參考，請於實際裁切前再次核對尺寸。
-                </div>
-            </body>
-            </html>
-        `;
-
-        const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `裁切報表_${projectName}_${new Date().toLocaleDateString().replace(/\//g, '-')}.doc`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
 
 
     addReqBtn.addEventListener('click', () => { hapticFeedback(); addRow(requirementsContainer); });
@@ -1454,16 +1302,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 cutLines.push(cutItems.slice(i, i + 3).join('，'));
             }
             
-            let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
-            let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
+            const totalCutLen = pattern.cuts.reduce((sum, c) => sum + c, 0);
+            const totalCutLenStr = Number.isInteger(totalCutLen) ? totalCutLen : totalCutLen.toFixed(1);
             let countStr = String(pattern.count).padStart(2, ' ');
             
             // 第一行：原料支數
             text += ` ${pattern.stock} × ${countStr}\n`;
-            // 後續行：裁切規格（最後一行加上餘料）
+            // 後續行：裁切規格（最後一行加上合計尺寸總長）
             cutLines.forEach((line, idx) => {
                 if (idx === cutLines.length - 1) {
-                    text += `   ➔ ${line}  ${wastePrefix}${wasteVal}\n`;
+                    text += `   ➔ ${line}  切${totalCutLenStr}\n`;
                 } else {
                     text += `   ➔ ${line}\n`;
                 }
@@ -1488,13 +1336,13 @@ document.addEventListener('DOMContentLoaded', () => {
         plan.patterns.forEach((pattern, i) => {
             let cutsSummary = {};
             pattern.cuts.forEach(c => { cutsSummary[c] = (cutsSummary[c] || 0) + 1; });
-            let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
+            const totalCutLen = pattern.cuts.reduce((sum, c) => sum + c, 0);
+            const totalCutLenStr = Number.isInteger(totalCutLen) ? totalCutLen : totalCutLen.toFixed(1);
             let summaryStr = Object.keys(cutsSummary)
                 .sort((a,b) => Number(b) - Number(a))
                 .map(c => `${c}mm x ${cutsSummary[c]}件`)
                 .join('、');
-            let wasteLabel = pattern.waste <= 300 ? '廢' : '餘';
-            text += `${String(i + 1).padStart(2, ' ')}. [${pattern.count} 支 ${pattern.stock}] 切：${summaryStr} (${wasteLabel} ${wasteVal})\n`;
+            text += `${String(i + 1).padStart(2, ' ')}. [${pattern.count} 支 ${pattern.stock}] 切：${summaryStr} (切 ${totalCutLenStr})\n`;
         });
         
         text += `\n裁切流 (精簡)：${typeLabel}料${modelSuffix}\n`;
@@ -1512,14 +1360,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 cutLines.push(cutItems.slice(i, i + 3).join('，'));
             }
             
-            let wasteVal = Number.isInteger(pattern.waste) ? pattern.waste : pattern.waste.toFixed(1);
-            let wastePrefix = pattern.waste <= 300 ? '廢' : '餘';
+            const totalCutLen = pattern.cuts.reduce((sum, c) => sum + c, 0);
+            const totalCutLenStr = Number.isInteger(totalCutLen) ? totalCutLen : totalCutLen.toFixed(1);
             let countStr = String(pattern.count).padStart(2, ' ');
             
             text += ` ${pattern.stock} × ${countStr}\n`;
             cutLines.forEach((line, idx) => {
                 if (idx === cutLines.length - 1) {
-                    text += `   ➔ ${line}  ${wastePrefix}${wasteVal}\n`;
+                    text += `   ➔ ${line}  切${totalCutLenStr}\n`;
                 } else {
                     text += `   ➔ ${line}\n`;
                 }

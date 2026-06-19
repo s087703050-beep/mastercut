@@ -29,10 +29,11 @@ function calcAddedLength(currentLength, len, count, kerf) {
 }
 
 /**
- * 主演算法
+/**
+ * 全新動態餘料回流演算法 (Best-Fit Decreasing with Scrap Flowback)
  */
-function calculateAdvancedMixedPlan(requirementsData, kerf, allowedStocks, targetWaste = 300) {
-    // 合並相同尺寸的需求數量
+function calculateScrapFlowbackPlan(requirementsData, kerf, allowedStocks) {
+    // 1. 合併相同尺寸需求
     const itemMap = {};
     requirementsData.forEach(req => {
         const q = Number(req.qty);
@@ -42,169 +43,88 @@ function calculateAdvancedMixedPlan(requirementsData, kerf, allowedStocks, targe
         }
     });
 
-    // 依「總需求量（qty × length）」由大到小排序，讓量多的尺寸優先被集中處理
-    let items = Object.entries(itemMap)
-        .map(([length, qty]) => ({ length: Number(length), qty }))
-        .sort((a, b) => (b.qty * b.length) - (a.qty * a.length));
+    // 2. 將需求尺寸由大到小展開成扁平陣列 (大尺寸先切才流暢)
+    let allCuts = [];
+    for (const [lengthStr, qty] of Object.entries(itemMap)) {
+        const len = Number(lengthStr);
+        for (let i = 0; i < qty; i++) {
+            allCuts.push(len);
+        }
+    }
+    allCuts.sort((a, b) => b - a);
 
     const sticks = [];
     const unplacedErrors = [];
     const maxStock = Math.max(...allowedStocks);
+    const sortedStocks = [...allowedStocks].sort((a, b) => a - b); // 升序：6000, 6400
 
-    // 過濾超長需求
-    items = items.filter(item => {
-        if (item.length > maxStock) {
-            for (let i = 0; i < item.qty; i++) unplacedErrors.push(item.length);
-            return false;
+    // 3. 開始逐刀進行 Best-Fit 計算
+    allCuts.forEach(cutLen => {
+        if (cutLen > maxStock) {
+            unplacedErrors.push(cutLen);
+            return;
         }
-        return true;
+
+        let bestStickIdx = -1;
+        let minRemainingSpaceAfter = Infinity;
+
+        // 【核心改良】：先回頭檢查現有的每一隻料，看誰剩餘的空間塞得下這一刀，且塞完後剩的空間最小 (Best-Fit)
+        for (let i = 0; i < sticks.length; i++) {
+            const stick = sticks[i];
+            const neededSpace = cutLen + (stick.cuts.length > 0 ? kerf : 0);
+            
+            // 計算目前該支料已用的總長度
+            const currentUsed = stick.cuts.reduce((sum, c) => sum + c, 0) + (stick.cuts.length > 0 ? (stick.cuts.length - 1) * kerf : 0);
+            const remainingSpace = stick.stock - currentUsed;
+
+            if (remainingSpace >= neededSpace) {
+                const spaceAfter = remainingSpace - neededSpace;
+                if (spaceAfter < minRemainingSpaceAfter) {
+                    minRemainingSpaceAfter = spaceAfter;
+                    bestStickIdx = i;
+                }
+            }
+        }
+
+        if (bestStickIdx !== -1) {
+            // 找到了！這就是您說的「回頭去用第一隻（或之前的某支）剩餘空間去切」
+            sticks[bestStickIdx].cuts.push(cutLen);
+            // 更新廢料長度
+            const newUsed = sticks[bestStickIdx].cuts.reduce((sum, c) => sum + c, 0) + (sticks[bestStickIdx].cuts.length - 1) * kerf;
+            sticks[bestStickIdx].waste = sticks[bestStickIdx].stock - newUsed;
+        } else {
+            // 如果之前的舊料通通都塞不下了，才依序去開「新的一隻」
+            // 選擇能容納該尺寸的最小鋁材原料
+            let chosenStock = null;
+            for (const stock of sortedStocks) {
+                if (stock >= cutLen) {
+                    chosenStock = stock;
+                    break;
+                }
+            }
+            if (chosenStock === null) {
+                unplacedErrors.push(cutLen);
+            } else {
+                sticks.push({
+                    stock: chosenStock,
+                    cuts: [cutLen],
+                    waste: chosenStock - cutLen
+                });
+            }
+        }
     });
 
-    /**
-     * DFS 對單一鋁料長度搜索最佳 pattern
-     *
-     * 評分：
-     *   purityFactor：尺寸種類越少，加成越大
-     *     - 1 種尺寸 → ×4（純單尺寸，最利於工廠操作）
-     *     - 2 種尺寸 → ×2（尚可接受）
-     *     - 3 種以上 → ×1（無加成，作為最後手段）
-     *
-     *   score = repeats × (利用率²) × (每刀平均用量) × purityFactor
-     */
-    function dfsForStock(stockLength, maxWaste) {
-        let bestPattern = null;
-        let bestScore = -1;
-        let fallbackPattern = null;
-        let fallbackScore = -1;
-
-        let iterations = 0;
-        const MAX_ITER = 150000; // 平衡速度與最佳化品質
-
-        function dfs(idx, cuts, usedLength) {
-            if (iterations++ > MAX_ITER) return;
-
-            if (idx >= items.length) {
-                if (cuts.length === 0) return;
-
-                const waste = stockLength - usedLength;
-                if (waste < 0) return;
-
-                // 計算每種尺寸的使用數量
-                const counts = {};
-                for (const c of cuts) counts[c] = (counts[c] || 0) + 1;
-
-                // 計算可重複次數（受庫存數量限制）
-                let repeats = Infinity;
-                for (const len in counts) {
-                    const item = items.find(i => i.length === Number(len));
-                    if (!item) { repeats = 0; break; }
-                    repeats = Math.min(repeats, Math.floor(item.qty / counts[len]));
-                }
-                if (!isFinite(repeats) || repeats <= 0) return;
-
-                const cutsCount = cuts.length;
-                const utilizationRate = usedLength / stockLength;
-                const avgUsedPerCut = usedLength / cutsCount;
-
-                // 【關鍵】純淨度加成：尺寸種類越少，加成越大
-                const uniqueSizeCount = Object.keys(counts).length;
-                const purityFactor = uniqueSizeCount === 1 ? 4.0
-                                   : uniqueSizeCount === 2 ? 2.0
-                                   : 1.0;
-
-                // 最終評分
-                const score = repeats * (utilizationRate * utilizationRate) * avgUsedPerCut * purityFactor;
-
-                // fallback：不限 targetWaste
-                if (score > fallbackScore) {
-                    fallbackScore = score;
-                    fallbackPattern = { stock: stockLength, cuts: [...cuts], counts, waste, repeats };
-                }
-
-                if (waste <= maxWaste) {
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestPattern = { stock: stockLength, cuts: [...cuts], counts, waste, repeats };
-                    }
-                }
-                return;
-            }
-
-            const item = items[idx];
-            if (item.qty === 0 || item.length > stockLength) {
-                dfs(idx + 1, cuts, usedLength);
-                return;
-            }
-
-            // 計算最多能放幾支
-            let maxCount = 0;
-            let tempLen = usedLength;
-            while (maxCount < item.qty) {
-                const space = (tempLen === 0) ? item.length : item.length + kerf;
-                if (tempLen + space > stockLength) break;
-                tempLen += space;
-                maxCount++;
-            }
-
-            // 從多到少嘗試（優先大量）
-            for (let count = maxCount; count >= 0; count--) {
-                const added = calcAddedLength(usedLength, item.length, count, kerf);
-                const addedCuts = new Array(count).fill(item.length);
-                cuts.push(...addedCuts);
-                dfs(idx + 1, cuts, usedLength + added);
-                cuts.splice(cuts.length - count, count);
-                if (iterations > MAX_ITER) break;
-            }
-        }
-
-        dfs(0, [], 0);
-        return bestPattern || fallbackPattern;
-    }
-
-    // 主迴圈
-    while (items.length > 0) {
-        let chosen = null;
-        let bestGlobalScore = -1;
-
-        for (const stockLength of allowedStocks) {
-            const pattern = dfsForStock(stockLength, targetWaste);
-            if (!pattern) continue;
-
-            const isGood = pattern.waste <= targetWaste;
-            const usedLen = pattern.stock - pattern.waste;
-            const utilRate = usedLen / pattern.stock;
-            const cutsCount = pattern.cuts.length;
-            const avgUsedPerCut = cutsCount > 0 ? usedLen / cutsCount : 0;
-
-            // 全域評分同樣加入純淨度加成
-            const uniqueSizeCount = Object.keys(pattern.counts).length;
-            const purityFactor = uniqueSizeCount === 1 ? 4.0
-                               : uniqueSizeCount === 2 ? 2.0
-                               : 1.0;
-
-            const score = (isGood ? 1e12 : 0)
-                        + pattern.repeats * (utilRate * utilRate) * avgUsedPerCut * purityFactor;
-
-            if (score > bestGlobalScore) {
-                bestGlobalScore = score;
-                chosen = pattern;
-            }
-        }
-
-        if (!chosen) break;
-
-        for (let r = 0; r < chosen.repeats; r++) {
-            sticks.push({ stock: chosen.stock, cuts: [...chosen.cuts], waste: chosen.waste });
-        }
-
-        for (const len in chosen.counts) {
-            const item = items.find(i => i.length === Number(len));
-            if (item) item.qty -= chosen.counts[len] * chosen.repeats;
-        }
-        items = items.filter(i => i.qty > 0);
-    }
-
     return buildPlanResult(sticks, unplacedErrors);
+}
+
+/**
+ * 主演算法
+ */
+/**
+ * 主演算法 - 統一採用「極致省料 (餘料回流)」最佳適應遞減演算法 (Best-Fit Decreasing with Scrap Flowback)
+ */
+function calculateAdvancedMixedPlan(requirementsData, kerf, allowedStocks, targetWaste = 300) {
+    return calculateScrapFlowbackPlan(requirementsData, kerf, allowedStocks);
 }
 
 function buildPlanResult(sticks, unplacedErrors) {
@@ -219,16 +139,20 @@ function buildPlanResult(sticks, unplacedErrors) {
 
     /**
      * 排序規則（配合工廠操作邏輯）：
-     * 1. 支數最多的 pattern 排最前（人員從最大批量開始作業）
-     * 2. 同支數下，純單一尺寸的優先（設定鋸片後一次切完）
-     * 3. 同支數同純淨度下，廢料少的在前
+     * 1. 優先按裁切圖解中包含的最大尺寸降序排序 (讓相同最大尺寸的裁切優先集中處理，如所有包含 959mm 的圖解排在最前)
+     * 2. 同最大尺寸下，支數最多的 pattern 排最前
+     * 3. 同支數下，純單一尺寸的優先
+     * 4. 同純淨度下，廢料少的在前
      */
     const getUniqueSizes = p => new Set(p.cuts).size;
+    const getMaxCut = p => p.cuts.length > 0 ? Math.max(...p.cuts) : 0;
     const patterns = Object.values(patternsMap).sort((a, b) => {
-        if (b.count !== a.count) return b.count - a.count; // 【主】支數多優先
+        const maxA = getMaxCut(a), maxB = getMaxCut(b);
+        if (maxB !== maxA) return maxB - maxA;             // 【主】最大尺寸降序
+        if (b.count !== a.count) return b.count - a.count; // 【次】支數多優先
         const ua = getUniqueSizes(a), ub = getUniqueSizes(b);
-        if (ua !== ub) return ua - ub;        // 【次】純單尺寸優先
-        return a.waste - b.waste;              // 【末】廢料少優先
+        if (ua !== ub) return ua - ub;                     // 【參】純單尺寸優先
+        return a.waste - b.waste;                          // 【末】廢料少優先
     });
 
     return {
@@ -241,7 +165,7 @@ function buildPlanResult(sticks, unplacedErrors) {
     };
 }
 
-function calculateMixedPlans(requirementsData, kerf) {
+function calculateMixedPlans(requirementsData, kerf, algo = 'dfs') {
     let totalLength = 0;
     let totalQty = 0;
     requirementsData.forEach(req => {
@@ -251,9 +175,9 @@ function calculateMixedPlans(requirementsData, kerf) {
         totalLength += (l + kerf) * q;
     });
 
-    const plan6000  = calculateAdvancedMixedPlan(requirementsData, kerf, [6000]);
-    const plan6400  = calculateAdvancedMixedPlan(requirementsData, kerf, [6400]);
-    const planMixed = calculateAdvancedMixedPlan(requirementsData, kerf, [6000, 6400]);
+    const plan6000  = calculateAdvancedMixedPlan(requirementsData, kerf, [6000], 300, algo);
+    const plan6400  = calculateAdvancedMixedPlan(requirementsData, kerf, [6400], 300, algo);
+    const planMixed = calculateAdvancedMixedPlan(requirementsData, kerf, [6000, 6400], 300, algo);
 
     return {
         success: plan6000.unplacedErrors.length === 0 &&

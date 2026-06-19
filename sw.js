@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dechang-v6';
+const CACHE_NAME = 'dechang-v11';
 const ASSETS = [
   './',
   './index.html',
